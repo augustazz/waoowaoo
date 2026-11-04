@@ -1,7 +1,11 @@
 import type { S3ClientConfig } from '@aws-sdk/client-s3'
 import { getDeploymentConfig, type MediaObjectDelivery } from '@/lib/deployment/config'
 import { StorageConfigError } from '@/lib/storage/errors'
-import { requireEnv } from '@/lib/storage/utils'
+import {
+  getStorageSettingsState,
+  normalizeStorageRuntimeSettings,
+  type StorageRuntimeSettings,
+} from '@/lib/runtime-config/storage-settings'
 
 const DEFAULT_S3_REGION = 'us-east-1'
 
@@ -54,34 +58,63 @@ function parseEndpoint(
   return endpoint.origin
 }
 
-function parseBooleanEnv(name: string, defaultValue: boolean): boolean {
-  const rawValue = process.env[name]?.trim().toLowerCase()
-  if (!rawValue) return defaultValue
-  if (rawValue === 'true') return true
-  if (rawValue === 'false') return false
-  throw new StorageConfigError(`${name} must be "true" or "false"`)
+export function toS3StorageConfig(
+  settings: StorageRuntimeSettings,
+  mediaObjectDelivery: MediaObjectDelivery,
+): S3StorageConfig {
+  return {
+    endpoint: parseEndpoint('S3_ENDPOINT', settings.endpoint, mediaObjectDelivery),
+    uploadEndpoint: parseEndpoint(
+      'S3_UPLOAD_ENDPOINT',
+      settings.uploadEndpoint,
+      mediaObjectDelivery,
+    ),
+    region: settings.region || DEFAULT_S3_REGION,
+    bucket: settings.bucket,
+    forcePathStyle: settings.forcePathStyle,
+    mediaObjectDelivery,
+    credentials: {
+      accessKeyId: settings.accessKeyId,
+      secretAccessKey: settings.secretAccessKey,
+      ...(settings.sessionToken ? { sessionToken: settings.sessionToken } : {}),
+    },
+  }
+}
+
+export function buildS3StorageConfigFromInput(input: {
+  readonly endpoint: unknown
+  readonly uploadEndpoint?: unknown
+  readonly region?: unknown
+  readonly bucket: unknown
+  readonly forcePathStyle?: unknown
+  readonly accessKeyId: unknown
+  readonly secretAccessKey: unknown
+  readonly sessionToken?: unknown
+}, mediaObjectDelivery: MediaObjectDelivery): S3StorageConfig {
+  return toS3StorageConfig(
+    normalizeStorageRuntimeSettings({
+      endpoint: input.endpoint,
+      uploadEndpoint: input.uploadEndpoint,
+      region: input.region,
+      bucket: input.bucket,
+      forcePathStyle: input.forcePathStyle,
+      accessKeyId: input.accessKeyId,
+      secretAccessKey: input.secretAccessKey,
+      sessionToken: input.sessionToken,
+    }),
+    mediaObjectDelivery,
+  )
 }
 
 export function loadS3StorageConfig(): S3StorageConfig {
   const { mediaObjectDelivery } = getDeploymentConfig()
-  const sessionToken = process.env.S3_SESSION_TOKEN?.trim()
-  return {
-    endpoint: parseEndpoint('S3_ENDPOINT', requireEnv('S3_ENDPOINT'), mediaObjectDelivery),
-    uploadEndpoint: parseEndpoint(
-      'S3_UPLOAD_ENDPOINT',
-      requireEnv('S3_UPLOAD_ENDPOINT'),
-      mediaObjectDelivery,
-    ),
-    region: process.env.S3_REGION?.trim() || DEFAULT_S3_REGION,
-    bucket: requireEnv('S3_BUCKET'),
-    forcePathStyle: parseBooleanEnv('S3_FORCE_PATH_STYLE', false),
-    mediaObjectDelivery,
-    credentials: {
-      accessKeyId: requireEnv('S3_ACCESS_KEY_ID'),
-      secretAccessKey: requireEnv('S3_SECRET_ACCESS_KEY'),
-      ...(sessionToken ? { sessionToken } : {}),
-    },
+  const state = getStorageSettingsState()
+  if (!state.configured || !state.settings) {
+    throw new StorageConfigError(
+      'S3 storage is not configured. Set it in the admin settings page or provide S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY.',
+    )
   }
+  return toS3StorageConfig(state.settings, mediaObjectDelivery)
 }
 
 export function toS3ClientConfig(config: S3StorageConfig, endpoint: string): S3ClientConfig {

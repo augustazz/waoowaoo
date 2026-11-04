@@ -1,6 +1,7 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
+import { ProviderModelDiscovery } from './provider-card/ProviderModelDiscovery'
 import { ProviderModelSections } from './provider-card/ProviderModelSections'
 import { ProviderBaseFields } from './provider-card/ProviderBaseFields'
 import { ProviderRowShell } from './provider-card/ProviderRowShell'
@@ -16,6 +17,9 @@ export function ProviderCard({
   expanded,
   onExpandChange,
   onUpdateApiKey,
+  onUpdateBaseUrl,
+  discovery,
+  onRefreshModels,
   onDeleteModel,
   onUpdateModel,
   onDeleteProvider,
@@ -45,14 +49,22 @@ export function ProviderCard({
       t={t}
       state={state}
     >
-      <ProviderBaseFields provider={provider} t={t} state={state} />
-      <ProviderModelSections
+      <ProviderBaseFields provider={provider} t={t} state={state} onUpdateBaseUrl={onUpdateBaseUrl} />
+      {provider.editableBaseUrl && (
+        <ProviderModelDiscovery
+          provider={provider}
+          discovery={discovery}
+          onRefreshModels={onRefreshModels}
+          t={t}
+        />
+      )}
+      {!provider.editableBaseUrl && <ProviderModelSections
         provider={provider}
         onDeleteModel={onDeleteModel}
         onUpdateModel={onUpdateModel}
         t={t}
         state={state}
-      />
+      />}
     </ProviderRowShell>
   )
 }

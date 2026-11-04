@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslations } from 'next-intl'
 import type { CapabilityValue } from '@/lib/ai-registry/types'
@@ -59,6 +60,9 @@ export interface CapabilityBooleanToggle {
 }
 
 export interface ModelCapabilityDropdownProps {
+    searchPlaceholder?: string
+    emptyLabel?: string
+    modelListFooter?: ReactNode
     /** Available model options */
     models: ModelCapabilityOption[]
     /** Currently selected model key */
@@ -147,10 +151,14 @@ export function ModelCapabilityDropdown({
     booleanToggles = [],
     placementMode = 'auto',
     allowUnset = false,
+    searchPlaceholder,
+    emptyLabel,
+    modelListFooter,
 }: ModelCapabilityDropdownProps) {
     const t = useTranslations('configModal')
     const tv = useTranslations('video')
     const [isOpen, setIsOpen] = useState(false)
+    const [search, setSearch] = useState('')
     const triggerRef = useRef<HTMLDivElement>(null)
     const panelRef = useRef<HTMLDivElement>(null)
     const selectedProviderGroupRef = useRef<HTMLDivElement | null>(null)
@@ -225,6 +233,7 @@ export function ModelCapabilityDropdown({
             return
         }
         updateDropdownPlacement()
+        setSearch('')
         setIsOpen(true)
     }
 
@@ -240,8 +249,8 @@ export function ModelCapabilityDropdown({
         })
     const fallbackProviderLabel = t('otherProvider')
     const providerGroups = useMemo(
-        () => groupModelCapabilityOptions(models, fallbackProviderLabel),
-        [models, fallbackProviderLabel],
+        () => groupModelCapabilityOptions(models.filter(model => !searchPlaceholder || `${model.label} ${model.value}`.toLowerCase().includes(search.trim().toLowerCase())), fallbackProviderLabel),
+        [models, fallbackProviderLabel, search, searchPlaceholder],
     )
     const selectedProviderLabel = useMemo(
         () => resolveSelectedModelProviderLabel(models, value, fallbackProviderLabel),
@@ -295,6 +304,7 @@ export function ModelCapabilityDropdown({
             {/* ─── Trigger (Deep Glass Glow Style) ─── */}
             <button
                 type="button"
+                aria-expanded={isOpen}
                 onClick={handleToggleOpen}
                 className={`glass-input-base w-full ${triggerPx} ${triggerPy} rounded-[14px] transition-all duration-200 cursor-pointer ${isOpen
                     ? '!border-[var(--glass-tone-info-fg)]'
@@ -337,7 +347,17 @@ export function ModelCapabilityDropdown({
                     style={panelStyle}
                 >
                     {/* Model list */}
+                    {searchPlaceholder && (
+                        <div className="shrink-0 p-3">
+                            <input type="search" aria-label={searchPlaceholder} placeholder={searchPlaceholder}
+                                value={search} onChange={event => setSearch(event.target.value)}
+                                className="glass-input-base w-full rounded-lg px-3 py-2 text-sm" />
+                        </div>
+                    )}
                     <div className="px-2 pb-2 min-h-0 flex-1 overflow-y-auto app-scrollbar">
+                        {providerGroups.length === 0 && emptyLabel && (
+                            <p className="px-3 py-3 text-xs text-[var(--glass-text-tertiary)]">{emptyLabel}</p>
+                        )}
                         {providerGroups.map(([providerLabel, groupModels]) => (
                             <div
                                 key={providerLabel}
@@ -382,6 +402,7 @@ export function ModelCapabilityDropdown({
                                 </div>
                             </div>
                         ))}
+                        {modelListFooter}
                     </div>
 
                     {/* Capability params: fixed at panel bottom */}

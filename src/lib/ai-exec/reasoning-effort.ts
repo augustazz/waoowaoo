@@ -8,7 +8,7 @@ import {
   parseReasoningEffort,
   type ReasoningEffort,
 } from '@/lib/ai-registry/reasoning-effort'
-import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/ai-registry/capabilities-catalog'
+import { resolveRegisteredLlmCapabilities } from '@/lib/ai-registry/llm-protocol'
 
 /**
  * `utility` covers short mechanical LLM work that is not the Primary Agent and
@@ -42,7 +42,7 @@ export async function resolveReasoningEffort(input: {
 }): Promise<ReasoningEffort> {
   ensureAiCatalogsRegistered()
 
-  const capabilities = resolveBuiltinCapabilitiesByModelKey('llm', input.modelKey)?.llm
+  const capabilities = resolveRegisteredLlmCapabilities(input.modelKey)
   if (!capabilities) throw new Error(`LLM_CAPABILITIES_REQUIRED:${input.modelKey}`)
   if (!capabilities.reasoningEffortOptions?.length) return 'none'
   const modelDefault = parseReasoningEffort(

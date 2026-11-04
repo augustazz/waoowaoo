@@ -49,7 +49,7 @@
   "modelDisplayName": "Display Name (for your reference)",
   "modelActualId": "Actual Model ID (API parameter)",
   "noModelsForProvider": "No models configured for this provider",
-  "providerPool": "Providers and models",
+  "providerPool": "Provider configuration",
   "dragToSort": "Drag to sort",
   "providerIdExists": "Provider ID already exists",
   "presetProviderCannotDelete": "Preset providers cannot be deleted",
@@ -58,6 +58,8 @@
   "confirmDeleteModel": "Are you sure you want to delete this model?",
   "baseUrl": "Base URL",
   "configureBaseUrl": "Configure URL",
+  "responsesBaseUrlInvalid": "Enter an HTTP(S) API base URL without credentials, query parameters, or the /responses path.",
+  "responsesProviderHint": "Enter the API base URL (often ending in /v1). Assistant requires Responses API streaming and tool calls; image generation requires the Images API. Once saved, choose a model above.",
   "addModel": "Add Model",
   "openaiCompatVideoOnlyHint": "Only OpenAI official-format image-to-video models are supported.",
   "typeText": "Text",
@@ -134,7 +136,7 @@
       "google_step1": "Go to Google AI Studio and create an API Key"
     }
   },
-  "providerPoolHint": "Add API keys and custom models here; configured models then appear in the category pickers above.",
+  "providerPoolHint": "Configure the URL and API key here. Models appear automatically in the category dropdowns above.",
   "keyConfigured": "API key configured",
   "typeVoice": "Voice design",
   "modelSelectionRequired": "Select one model",
@@ -153,7 +155,19 @@
     "voice": "Voice model"
   },
   "slotUnset": "Not selected",
-  "slotEmpty": "Configure a provider API key below first.",
+  "slotEmpty": "No provider supports this category.",
   "inUse": "In use",
-  "providerModelsCount": "{count} models"
+  "providerModelsCount": "{count} models",
+  "discovery": {
+    "fetch": "Refresh model list",
+    "loading": "Loading…",
+    "search": "Search model name or ID",
+    "noMatches": "No matching models. You can enter a model ID manually.",
+    "unknown": "Unclassified",
+    "fetchFailed": "Could not fetch models. Check the URL, key, and /models support, or enter an ID in a model dropdown above.",
+    "typeConflict": "This model ID already belongs to another category. Check the model ID.",
+    "available": "{count} models available in the dropdowns above",
+    "manual": "Enter model ID manually",
+    "provider": "Provider"
+  }
 }

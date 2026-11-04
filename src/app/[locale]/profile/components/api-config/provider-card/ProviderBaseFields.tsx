@@ -3,16 +3,21 @@
 import type { ProviderCardProps, ProviderCardTranslator } from './types'
 import type { UseProviderCardStateResult } from './hooks/useProviderCardState'
 import { AppIcon } from '@/components/ui/icons'
+import { ProviderEndpointField } from './ProviderEndpointField'
 
 interface ProviderBaseFieldsProps {
   provider: ProviderCardProps['provider']
   t: ProviderCardTranslator
   state: UseProviderCardStateResult
+  onUpdateBaseUrl?: ProviderCardProps['onUpdateBaseUrl']
 }
 
-export function ProviderBaseFields({ provider, t, state }: ProviderBaseFieldsProps) {
+export function ProviderBaseFields({ provider, t, state, onUpdateBaseUrl }: ProviderBaseFieldsProps) {
   return (
-    <div className="px-4 pt-3">
+    <div className="space-y-2 px-4 pt-3">
+      {provider.editableBaseUrl && onUpdateBaseUrl && (
+        <ProviderEndpointField provider={provider} t={t} onUpdate={onUpdateBaseUrl} />
+      )}
       <div className="glass-surface-soft flex items-center gap-3 rounded-xl px-3 py-2">
         <span className="shrink-0 text-xs font-medium text-[var(--glass-text-secondary)]">
           {t('apiKeyLabel')}

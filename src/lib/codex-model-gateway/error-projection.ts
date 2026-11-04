@@ -89,12 +89,12 @@ function readNestedProviderError(value: unknown): Record<string, unknown> | null
   }
 }
 
-async function readProviderErrorMetadata(response: Response): Promise<ProviderErrorMetadata> {
+async function readProviderErrorMetadata(response: Response, providerKey: string): Promise<ProviderErrorMetadata> {
   let parsed: unknown
   try {
     parsed = await readProviderJsonResponse({
       response,
-      provider: 'openrouter',
+      provider: providerKey,
       phase: 'submit',
       maxBytes: CODEX_PROVIDER_ERROR_MAX_BYTES,
     })
@@ -132,7 +132,7 @@ async function readProviderErrorMetadata(response: Response): Promise<ProviderEr
     ?? boundedProviderErrorMessage(error?.message)
     ?? boundedProviderErrorMessage(root?.message)
   const source = new ProviderHttpError({
-    provider: 'openrouter',
+    provider: providerKey,
     phase: 'submit',
     statusCode: response.status,
     requestId: response.headers.get('x-request-id')?.trim()
@@ -170,11 +170,12 @@ function unifiedCodeForFailure(
 }
 
 function capturedFailure(input: {
+  readonly providerKey: string
   readonly metadata: ProviderErrorMetadata
   readonly kind: CodexProviderFailureKind
   readonly providerStatus: number
 }): FailureRecord {
-  const normalized = resolveAiProviderAdapter('openrouter').failure.normalize({
+  const normalized = resolveAiProviderAdapter(input.providerKey).failure.normalize({
     error: input.metadata.source,
     phase: 'submit',
     operation: EXTERNAL_OPERATION.PROVIDER_SUBMIT,
@@ -195,7 +196,7 @@ function capturedFailure(input: {
 
 function failedProjection(input: Omit<CodexProviderResponseProjection, 'failure'> & {
   readonly metadata: ProviderErrorMetadata
-}): CodexProviderResponseProjection {
+}, providerKey: string): CodexProviderResponseProjection {
   if (!input.failureKind) throw new Error('CODEX_PROVIDER_FAILURE_KIND_REQUIRED')
   return {
     response: input.response,
@@ -204,6 +205,7 @@ function failedProjection(input: Omit<CodexProviderResponseProjection, 'failure'
     providerCode: input.providerCode,
     providerErrorType: input.providerErrorType,
     failure: capturedFailure({
+      providerKey,
       metadata: input.metadata,
       kind: input.failureKind,
       providerStatus: input.providerStatus,
@@ -317,7 +319,9 @@ const PROVIDER_OVERLOAD_ERROR_TOKENS = new Set([
  */
 export async function projectCodexProviderResponse(
   response: Response,
+  providerKey = 'openai-compatible',
 ): Promise<CodexProviderResponseProjection> {
+  const fail = (input: Parameters<typeof failedProjection>[0]) => failedProjection(input, providerKey)
   const providerStatus = response.status
   if (response.ok) {
     return {
@@ -330,14 +334,14 @@ export async function projectCodexProviderResponse(
     }
   }
 
-  const metadata = await readProviderErrorMetadata(response)
+  const metadata = await readProviderErrorMetadata(response, providerKey)
   const providerCode = metadata.providerCode ?? metadata.code ?? metadata.type
   const providerErrorType = metadata.errorType
   if (
     providerStatus === 402
     || hasProviderErrorToken(metadata, PROVIDER_BILLING_ERROR_TOKENS)
   ) {
-    return failedProjection({
+    return fail({
       response: canonicalCodexErrorResponse({
         source: response,
         status: 429,
@@ -353,7 +357,7 @@ export async function projectCodexProviderResponse(
     })
   }
   if (hasProviderErrorToken(metadata, PROVIDER_POLICY_ERROR_TOKENS)) {
-    return failedProjection({
+    return fail({
       response: canonicalCodexStreamFailureResponse({
         code: 'cyber_policy',
         message: metadata.message,
@@ -366,7 +370,7 @@ export async function projectCodexProviderResponse(
     })
   }
   if (hasProviderErrorToken(metadata, PROVIDER_CONTEXT_ERROR_TOKENS)) {
-    return failedProjection({
+    return fail({
       response: canonicalCodexStreamFailureResponse({
         code: 'context_length_exceeded',
         message: metadata.message,
@@ -379,7 +383,7 @@ export async function projectCodexProviderResponse(
     })
   }
   if (providerStatus === 429) {
-    return failedProjection({
+    return fail({
       response: projectTransparentProviderResponse(
         response,
         typeof metadata.source.errorEnvelope === 'string'
@@ -394,7 +398,7 @@ export async function projectCodexProviderResponse(
     })
   }
   if (hasProviderErrorToken(metadata, PROVIDER_OVERLOAD_ERROR_TOKENS)) {
-    return failedProjection({
+    return fail({
       response: canonicalCodexErrorResponse({
         source: response,
         status: 503,
@@ -410,7 +414,7 @@ export async function projectCodexProviderResponse(
     })
   }
   if (providerStatus === 401 || providerStatus === 403 || providerStatus === 404) {
-    return failedProjection({
+    return fail({
       response: canonicalCodexErrorResponse({
         source: response,
         status: 503,
@@ -426,7 +430,7 @@ export async function projectCodexProviderResponse(
     })
   }
   if (providerStatus >= 400 && providerStatus < 500) {
-    return failedProjection({
+    return fail({
       response: canonicalCodexErrorResponse({
         source: response,
         status: 400,
@@ -442,7 +446,7 @@ export async function projectCodexProviderResponse(
     })
   }
   if (providerStatus >= 500) {
-    return failedProjection({
+    return fail({
       response: canonicalCodexErrorResponse({
         source: response,
         status: 503,
@@ -457,7 +461,7 @@ export async function projectCodexProviderResponse(
       metadata,
     })
   }
-  return failedProjection({
+  return fail({
     response: canonicalCodexErrorResponse({
       source: response,
       status: 500,

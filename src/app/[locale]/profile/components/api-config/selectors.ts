@@ -46,6 +46,8 @@ export function mergeProvidersForDisplay(
     if (matchedPreset) {
       merged.push({
         ...matchedPreset,
+        id: savedProvider.id,
+        name: savedProvider.id === matchedPreset.id ? matchedPreset.name : savedProvider.name,
         hasApiKey: savedProvider.hasApiKey === true,
         baseUrl: savedProvider.baseUrl || matchedPreset.baseUrl,
       })

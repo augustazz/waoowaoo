@@ -13,7 +13,7 @@ interface ModelRowProps {
   onUpdateModel: ProviderCardProps['onUpdateModel']
 }
 
-/** A catalog entry, not a switch: models are chosen in the slot cards above. */
+/** Catalog maintenance; model selection belongs to the category picker. */
 export function ModelRow({ model, t, state, onDeleteModel, onUpdateModel }: ModelRowProps) {
   const inUse = state.isDefaultModel(model)
   const comingSoon = isPresetComingSoonModel(model.provider, model.modelId)

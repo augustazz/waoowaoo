@@ -4,6 +4,9 @@ import { testProviderConnection } from '@/lib/ai-exec/provider-test'
 import type { ProjectAgentOperationRegistryDraft } from '@/lib/operations/types'
 import { getProviderConfig } from '@/lib/user-api/runtime-config'
 import { assertUserProviderConfigurationAvailable } from '@/lib/user-api/availability'
+import { listUserProviderModels } from '@/lib/user-api/provider-model-discovery'
+
+const providerModelsInputSchema = z.object({ providerId: z.string().trim().min(1).max(128) }).strict()
 
 const providerDiagnosticInputSchema = z.object({
   providerId: z.string().trim().min(1),
@@ -15,6 +18,18 @@ const providerDiagnosticInputSchema = z.object({
 
 export function createUserApiConfigConnectionDiagnosticOperations(): ProjectAgentOperationRegistryDraft {
   return {
+    api_user_api_config_list_provider_models: {
+      id: 'api_user_api_config_list_provider_models',
+      summary: 'API-only: Read the configured provider model list without generating content.',
+      intent: 'query',
+      effects: { writes: false, billable: false, destructive: false, overwrite: false, bulk: false, externalSideEffects: true, longRunning: false },
+      inputSchema: providerModelsInputSchema,
+      outputSchema: z.unknown(),
+      execute: async (ctx, input) => {
+        const parsed = providerModelsInputSchema.parse(input)
+        return listUserProviderModels(ctx.userId, parsed.providerId)
+      },
+    },
     api_user_api_config_test_connection: {
       id: 'api_user_api_config_test_connection',
       summary: 'API-only: Test LLM connection with user-provided provider/baseUrl/apiKey.',

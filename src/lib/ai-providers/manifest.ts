@@ -3,7 +3,7 @@ import type { AsyncTaskProviderRegistration } from '@/lib/ai-providers/async-tas
 import type { ProviderMediaInputTransport } from '@/lib/deployment/config'
 import type { PlatformModelPreset } from '@/lib/platform-models/types'
 import type { ApiConfigCatalogModel } from '@/lib/ai-registry/api-config-catalog'
-import type { UnifiedModelType } from '@/lib/ai-registry/types'
+import type { AiCodexRuntimeWireApi, AiLlmProtocol, AiPublicReasoningMode, UnifiedModelType } from '@/lib/ai-registry/types'
 import type { PricingApiType } from '@/lib/ai-registry/pricing-catalog'
 
 export type ProviderMediaInputKind = 'image' | 'audio' | 'video'
@@ -41,6 +41,15 @@ export interface AiProviderManifest {
     readonly visibility: 'visible' | 'hidden'
     readonly name: string
     readonly baseUrl?: string
+    readonly editableBaseUrl?: boolean
+    /** Providers with user-defined models need no placeholder catalog model. */
+    readonly modelTypes?: readonly UnifiedModelType[]
+  }
+  /** Explicit defaults for arbitrary user-defined text model IDs. */
+  readonly customLlm?: {
+    readonly protocol: AiLlmProtocol
+    readonly publicReasoningMode: AiPublicReasoningMode
+    readonly codexRuntimeWireApi: AiCodexRuntimeWireApi
   }
   readonly platformCredentials?: {
     readonly envPrefix: string

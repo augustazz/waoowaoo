@@ -7,6 +7,7 @@ import {
 } from './cost'
 import { BUILTIN_PRICING_VERSION } from '@/lib/ai-registry/pricing-resolution'
 import { toChargeableCredits } from './credits'
+import { getBillingModeSync } from './mode'
 import { ensureAiCatalogsRegistered } from '@/lib/ai-exec/catalog-bootstrap'
 import { getTaskDefinition } from '@/lib/task/definition'
 import type { TaskType } from '@/lib/task/types'
@@ -48,12 +49,24 @@ function pickFirstString(values: unknown[]): string | null {
   return null
 }
 
+function quoteTaskPricing(calculateCost: () => number) {
+  // OFF disables the application's ledger. Keep model/quantity metadata for
+  // approvals and execution, but do not require a platform price for user APIs.
+  // SHADOW and ENFORCE must still resolve a real catalog price or fail.
+  if (getBillingModeSync() === 'OFF') {
+    return { maxFrozenCost: 0, status: 'skipped' as const }
+  }
+  return {
+    maxFrozenCost: toChargeableCredits(calculateCost()),
+    pricingVersion: BUILTIN_PRICING_VERSION,
+    status: 'quoted' as const,
+  }
+}
+
 function buildTextTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillingInfo | null {
   const inputTokens = Math.max(0, Math.floor(toNumber(payload?.maxInputTokens, 3000)))
   const model = pickFirstString([payload?.analysisModel, payload?.model])
   if (!model) return null
-
-  const maxFrozenCost = toChargeableCredits(calcText(model, inputTokens, 0))
 
   return {
     billable: true,
@@ -63,11 +76,9 @@ function buildTextTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBilling
     model,
     quantity: inputTokens,
     unit: 'token',
-    maxFrozenCost,
-    pricingVersion: BUILTIN_PRICING_VERSION,
+    ...quoteTaskPricing(() => calcText(model, inputTokens, 0)),
     action: String(taskType),
     metadata: { inputTokens },
-    status: 'quoted',
   }
 }
 
@@ -90,7 +101,6 @@ function buildImageTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillin
     ...(aspectRatio ? { aspectRatio } : {}),
     ...(resource ? { referenceImageCount: resource.imageInputPositions.length } : {}),
   }
-  const maxFrozenCost = toChargeableCredits(calcImage(model, quantity, metadata))
   return {
     billable: true,
     source: 'task',
@@ -99,11 +109,9 @@ function buildImageTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillin
     model,
     quantity,
     unit: 'image',
-    maxFrozenCost,
-    pricingVersion: BUILTIN_PRICING_VERSION,
+    ...quoteTaskPricing(() => calcImage(model, quantity, metadata)),
     action: String(taskType),
     ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
-    status: 'quoted',
   }
 }
 
@@ -139,7 +147,6 @@ function buildVideoTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillin
       )),
     } : {}),
   }
-  const maxFrozenCost = toChargeableCredits(calcVideo(model, resolution || '720p', quantity, metadata))
   return {
     billable: true,
     source: 'task',
@@ -148,11 +155,9 @@ function buildVideoTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillin
     model,
     quantity,
     unit: 'video',
-    maxFrozenCost,
-    pricingVersion: BUILTIN_PRICING_VERSION,
+    ...quoteTaskPricing(() => calcVideo(model, resolution || '720p', quantity, metadata)),
     action: String(taskType),
     metadata,
-    status: 'quoted',
   }
 }
 
@@ -178,11 +183,9 @@ function buildMusicTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillin
     model,
     quantity,
     unit: 'call',
-    maxFrozenCost: toChargeableCredits(calcMusic(model, quantity, metadata)),
-    pricingVersion: BUILTIN_PRICING_VERSION,
+    ...quoteTaskPricing(() => calcMusic(model, quantity, metadata)),
     action: String(taskType),
     metadata,
-    status: 'quoted',
   }
 }
 
@@ -200,14 +203,12 @@ function buildVoiceTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillin
     model,
     quantity: characters,
     unit: 'character',
-    maxFrozenCost: toChargeableCredits(calcVoice(model, characters)),
-    pricingVersion: BUILTIN_PRICING_VERSION,
+    ...quoteTaskPricing(() => calcVoice(model, characters)),
     action: String(taskType),
     metadata: {
       characters,
       ...(language ? { language } : {}),
     },
-    status: 'quoted',
   }
 }
 

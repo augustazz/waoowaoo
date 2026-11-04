@@ -7,11 +7,15 @@ import type { FixedParameterFieldsByModel } from '@/lib/ai-registry/fixed-parame
 import type { ProviderCardTranslator } from '../api-config/provider-card/types'
 import { MODEL_SLOT_PRESENTATION } from './model-slot-presentation'
 import type { ModelSlotOption, ModelSlotSelection } from './hooks/useApiConfigFilters'
+import type { CustomModel, Provider } from '../api-config'
+import { ManualModelEntry } from './ManualModelEntry'
 
 export interface ModelSlotCardProps {
   type: UnifiedModelType
   options: readonly ModelSlotOption[]
   selection: ModelSlotSelection
+  customProviders?: Provider[]
+  onManualSelect?: (model: Omit<CustomModel, 'enabled'>) => Promise<void>
   fixedParameterFields: FixedParameterFieldsByModel
   capabilityDefaults: CapabilitySelections
   onSelect: (type: UnifiedModelType, modelKey: string) => void
@@ -25,6 +29,7 @@ export interface ModelSlotCardProps {
  */
 export function ModelSlotCard(props: ModelSlotCardProps) {
   const { type, options, selection, t } = props
+  const customProviders = props.customProviders ?? []
   const presentation = MODEL_SLOT_PRESENTATION[type]
   const title = t(presentation.slotTitle)
   const fields = selection.modelKey ? props.fixedParameterFields[selection.modelKey] ?? [] : []
@@ -38,7 +43,7 @@ export function ModelSlotCard(props: ModelSlotCardProps) {
         </span>
         <h2 className="text-sm font-semibold text-[var(--glass-text-primary)]">{title}</h2>
       </div>
-      {options.length === 0 ? (
+      {options.length === 0 && (customProviders.length === 0 || !props.onManualSelect) ? (
         <p className="rounded-xl bg-[var(--glass-tone-surface)] px-3 py-2 text-[12px] text-[var(--glass-text-secondary)] shadow-[var(--glass-tone-shadow)]">
           {t('slotEmpty')}
         </p>
@@ -46,10 +51,9 @@ export function ModelSlotCard(props: ModelSlotCardProps) {
         <ModelCapabilityDropdown
           models={options.map((option) => ({
             value: option.modelKey,
-            label: option.name,
+            label: option.unclassified ? `${option.name} · ${t('discovery.unknown')}` : option.name,
             provider: option.provider,
             providerName: option.providerName,
-            disabled: option.comingSoon || !option.providerHasKey,
             groupNote: option.providerHasKey ? undefined : t('notConfigured'),
           }))}
           value={selection.modelKey || undefined}
@@ -74,6 +78,11 @@ export function ModelSlotCard(props: ModelSlotCardProps) {
           }}
           placeholder={selection.ambiguous ? t('modelSelectionRequired') : t('slotUnset')}
           allowUnset
+          searchPlaceholder={t('discovery.search')}
+          emptyLabel={t('discovery.noMatches')}
+          modelListFooter={customProviders.length > 0 && props.onManualSelect ? (
+            <ManualModelEntry type={type} providers={customProviders} onSelect={props.onManualSelect} t={t} />
+          ) : undefined}
         />
       )}
       {selection.ambiguous && (

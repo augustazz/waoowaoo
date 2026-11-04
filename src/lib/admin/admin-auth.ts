@@ -8,6 +8,10 @@ function splitEnvList(value: string | undefined): string[] {
     .filter((item) => item.length > 0)
 }
 
+export function isAdminUserId(userId: string): boolean {
+  return splitEnvList(process.env.ADMIN_USER_IDS).includes(userId)
+}
+
 export function requireAdminUserId(userId: string): void {
   const adminUserIds = splitEnvList(process.env.ADMIN_USER_IDS)
   if (adminUserIds.length === 0) {

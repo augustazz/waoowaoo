@@ -5,6 +5,6 @@ export const editionAi = {
   providerManifests: [],
   providerManifestExtensions: [],
   apiConfig: {
-    featuredProviderKeys: ['openrouter', 'ark'],
+    featuredProviderKeys: ['openai-compatible', 'ark'],
   },
 } satisfies EditionAiContract

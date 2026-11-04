@@ -18,6 +18,7 @@
     "scripts/media-restore-dry-run.ts",
     "scripts/media-safety-backup.ts",
     "scripts/migrate-image-urls-contract.ts",
+    "scripts/prisma-with-runtime-config.ts",
     "scripts/migrations/migrate-graph-artifacts-unique-index.ts",
     "scripts/task-error-stats.ts",
     "scripts/test-services.ts"

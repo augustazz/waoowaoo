@@ -10,7 +10,7 @@ function normalizeMode(input: unknown): BillingMode | null {
   return upper as BillingMode
 }
 
-function getModeFromEnv(): BillingMode {
+export function getBillingModeSync(): BillingMode {
   const rawMode = process.env.BILLING_MODE
   if (rawMode === undefined || rawMode === null || rawMode.trim() === '') {
     if (editionServer.billing.mustEnforce) {
@@ -30,9 +30,9 @@ function getModeFromEnv(): BillingMode {
 }
 
 export async function getBillingMode(): Promise<BillingMode> {
-  return getModeFromEnv()
+  return getBillingModeSync()
 }
 
 export function getBootBillingEnabled() {
-  return getModeFromEnv() === 'ENFORCE'
+  return getBillingModeSync() === 'ENFORCE'
 }

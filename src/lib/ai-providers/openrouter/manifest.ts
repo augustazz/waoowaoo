@@ -16,7 +16,7 @@ export const openRouterProviderManifest = defineAiProviderManifest({
   providerKey: 'openrouter',
   adapter: openRouterAdapter,
   apiConfig: {
-    visibility: 'visible',
+    visibility: 'hidden',
     name: 'OpenRouter',
     baseUrl: OPENROUTER_DEFAULT_BASE_URL,
   },

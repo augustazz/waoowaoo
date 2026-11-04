@@ -14,6 +14,7 @@ export interface ApiConfigCatalogProvider {
     id: string
     name: string
     baseUrl?: string
+    editableBaseUrl?: boolean
     featured: boolean
     connectionTest: boolean
     modelTypes: UnifiedModelType[]
@@ -37,6 +38,7 @@ export interface Provider {
     id: string
     name: string
     baseUrl?: string
+    editableBaseUrl?: boolean
     apiKey?: string
     hasApiKey?: boolean
     featured?: boolean
@@ -111,6 +113,7 @@ export function isPresetComingSoonModelKey(modelKey: string): boolean {
 }
 
 const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
+    'openai-compatible': '自定义 API',
     ark: '火山引擎 Ark',
     google: 'Google',
     fal: 'FAL',

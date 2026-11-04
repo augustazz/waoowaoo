@@ -3,6 +3,7 @@ import { ensureAiCatalogsRegistered } from '@/lib/ai-exec/catalog-bootstrap'
 import { resolveLlmRuntimeModel } from '@/lib/ai-exec/llm-runtime'
 import { getUserModelConfig } from '@/lib/config-service'
 import { getProviderConfig } from '@/lib/user-api/runtime-config'
+import { resolveAiProviderManifest } from '@/lib/ai-providers/manifests'
 import { verifyWaoRuntimeToken } from '@/lib/wao-mcp/runtime-token'
 import {
   CODEX_MODEL_GATEWAY_ASSISTANT_ID,
@@ -73,15 +74,6 @@ function buildRuntimeGatewayBaseUrl(runtimeReachableWaoBaseUrl: string): string 
   return parsed.toString().replace(/\/$/u, '')
 }
 
-function resolveCodexRuntimeModelId(upstreamModelId: string): string {
-  const openAiPrefix = 'openai/'
-  if (upstreamModelId.startsWith(openAiPrefix)) {
-    const modelId = upstreamModelId.slice(openAiPrefix.length)
-    if (modelId) return modelId
-  }
-  return upstreamModelId
-}
-
 async function resolveSelectedAssistantModel(scope: CodexModelGatewayScope) {
   const config = await getUserModelConfig(scope.userId)
   const modelKey = config.assistantModel?.trim() || ''
@@ -98,18 +90,13 @@ async function resolveSelectedAssistantModel(scope: CodexModelGatewayScope) {
   } catch {
     throw new CodexModelGatewayError('ASSISTANT_MODEL_UNSUPPORTED', 422)
   }
-  if (selection.provider !== 'openrouter') {
-    throw new CodexModelGatewayError(
-      'PROVIDER_RESPONSES_UNSUPPORTED',
-      422,
-    )
-  }
+  const manifest = resolveAiProviderManifest(selection.provider)
   ensureAiCatalogsRegistered()
   const codexRuntimeWireApi = findBuiltinCapabilities(
     'llm',
     selection.provider,
     selection.modelId,
-  )?.llm?.codexRuntimeWireApi
+  )?.llm?.codexRuntimeWireApi ?? manifest.customLlm?.codexRuntimeWireApi
   if (codexRuntimeWireApi !== 'responses') {
     throw new CodexModelGatewayError(
       'PROVIDER_RESPONSES_UNSUPPORTED',
@@ -135,6 +122,7 @@ async function resolveSelectedAssistantModel(scope: CodexModelGatewayScope) {
   }
   return {
     selection,
+    providerKey: manifest.providerKey,
     providerApiKey: providerConfig.apiKey,
     responsesEndpoint: buildResponsesEndpoint(providerBaseUrl),
   }
@@ -144,6 +132,7 @@ export async function resolveCodexModelGatewayUpstream(
   scopeValue: CodexModelGatewayScope,
 ): Promise<{
   readonly runtimeModelId: string
+  readonly providerKey: string
   readonly modelId: string
   readonly modelKey: string
   readonly responsesEndpoint: string
@@ -152,7 +141,8 @@ export async function resolveCodexModelGatewayUpstream(
   const scope = normalizeCodexModelGatewayScope(scopeValue)
   const resolved = await resolveSelectedAssistantModel(scope)
   return {
-    runtimeModelId: resolveCodexRuntimeModelId(resolved.selection.modelId),
+    runtimeModelId: resolved.selection.modelId,
+    providerKey: resolved.providerKey,
     modelId: resolved.selection.modelId,
     modelKey: resolved.selection.modelKey,
     responsesEndpoint: resolved.responsesEndpoint,
@@ -184,7 +174,7 @@ export async function resolveCodexModelGatewayRuntimeConfig(params: {
   }
   const resolved = await resolveSelectedAssistantModel(scope)
   return {
-    runtimeModelId: resolveCodexRuntimeModelId(resolved.selection.modelId),
+    runtimeModelId: resolved.selection.modelId,
     modelId: resolved.selection.modelId,
     modelKey: resolved.selection.modelKey,
     modelProviderId: CODEX_MODEL_GATEWAY_PROVIDER_ID,

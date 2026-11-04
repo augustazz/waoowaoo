@@ -2,6 +2,7 @@ import { ApiError } from '@/lib/api-errors'
 import { isApiConfigCatalogProviderId } from '@/lib/ai-registry/api-config-catalog'
 import type { StoredProvider } from './api-config-types'
 import { getProviderKey, isRecord, readTrimmedString } from './api-config-shared'
+import { normalizeResponsesBaseUrl, OPENAI_COMPATIBLE_PROVIDER_KEY } from '@/lib/ai-providers/openai-compatible/config'
 
 function assertSupportedProvider(providerId: string, field: string) {
   if (isApiConfigCatalogProviderId(providerId)) return
@@ -11,8 +12,9 @@ function assertSupportedProvider(providerId: string, field: string) {
   })
 }
 
-function normalizeProviderBaseUrl(value: string, field: string): string {
+function normalizeProviderBaseUrl(value: string, field: string, providerId: string): string {
   try {
+    if (getProviderKey(providerId) === OPENAI_COMPATIBLE_PROVIDER_KEY) return normalizeResponsesBaseUrl(value)
     const parsed = new URL(value)
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('PROTOCOL_INVALID')
     return parsed.toString().replace(/\/$/, '')
@@ -80,7 +82,7 @@ export function normalizeProvidersInput(rawProviders: unknown): StoredProvider[]
     }
     const rawBaseUrl = readTrimmedString(item.baseUrl)
     const baseUrl = rawBaseUrl
-      ? normalizeProviderBaseUrl(rawBaseUrl, `providers[${index}].baseUrl`)
+      ? normalizeProviderBaseUrl(rawBaseUrl, `providers[${index}].baseUrl`, normalizedId)
       : undefined
 
     normalized.push({

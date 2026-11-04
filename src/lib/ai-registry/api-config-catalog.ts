@@ -13,6 +13,7 @@ export interface ApiConfigCatalogProvider {
   id: string
   name: string
   baseUrl?: string
+  editableBaseUrl?: boolean
   featured: boolean
   connectionTest: boolean
   modelTypes: UnifiedModelType[]
@@ -56,10 +57,11 @@ export function listApiConfigCatalogProviders(): ApiConfigCatalogProvider[] {
         id: manifest.providerKey,
         name: manifest.apiConfig.name,
         ...(manifest.apiConfig.baseUrl ? { baseUrl: manifest.apiConfig.baseUrl } : {}),
+        ...(manifest.apiConfig.editableBaseUrl ? { editableBaseUrl: true } : {}),
         featured: isFeaturedApiConfigProvider(manifest.providerKey),
         connectionTest: Boolean(manifest.adapter.connectionTest),
         modelTypes: Array.from(new Set(
-          manifest.catalogs.apiConfigModels.map((model) => model.type),
+          manifest.apiConfig.modelTypes ?? manifest.catalogs.apiConfigModels.map((model) => model.type),
         )),
       }]
     : [])
@@ -188,6 +190,7 @@ export function matchesApiConfigModelKey(key: string | undefined | null, provide
 }
 
 const ZH_PROVIDER_NAME_MAP: Readonly<Record<string, string>> = {
+  'openai-compatible': '自定义 API',
   ark: '火山引擎 Ark',
 }
 

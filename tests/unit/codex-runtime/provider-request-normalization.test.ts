@@ -139,7 +139,7 @@ describe('Codex provider request normalization', () => {
         message: 'provider-private-message',
         statusCode: providerStatus,
       },
-      context: { system: 'provider', provider: 'openrouter', phase: 'submit' },
+      context: { system: 'provider', provider: 'openai-compatible', phase: 'submit' },
     })
     expect(projected.response.status).toBe(expectedStatus)
     expect(await projected.response.text()).toContain(`\"code\":\"${expectedCode}\"`)

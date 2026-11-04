@@ -98,9 +98,57 @@ In browser developer tools, enable the Network panel's **Protocol** column and r
 
 Open several application tabs and verify that navigation and event updates remain responsive while streams are open. Multiple SSE subscriptions are transport connections, not additional AI generation slots; this check neither changes nor measures the configured AI task concurrency limit. Do not launch paid jobs just to fill tabs.
 
-Then sign in/register and configure OpenRouter under the profile's API configuration. Verify a non-generating conversation only after the user has configured credentials and agreed to any conversation API charges. Ask before paid media generation.
+Then sign in/register and configure a custom API under the profile's API configuration. Verify a non-generating conversation only after the user has configured credentials and agreed to any conversation API charges. Ask before paid media generation.
 
 No public IP, domain, public MinIO endpoint, or tunnel is required for supported inline image-reference requests. AI APIs still require Internet access and provider funds.
+
+### Use a custom API
+
+In **Profile → API configuration**, expand **Custom API** (Chinese: **自定义 API**):
+
+1. Set **Base URL** to the API prefix, for example `https://your-api.example/v1`. The application appends endpoint paths such as `/models` and `/responses`; do not include `/responses` or `/chat/completions` in this field.
+2. Set the service's **API Key**. It is stored encrypted on the server; updating the URL preserves an existing key.
+3. Use the original **Assistant model** or **Image model** dropdown at the top to choose a model. Lists load automatically from `/models` using the saved encrypted key; **Refresh model list** under the provider refreshes them when needed.
+4. Selecting a model saves it immediately and persists after reloading. Switching the Assistant model keeps the other configured text models available. The provider section only configures the connection.
+
+Output modality metadata takes priority over common model name recognition. Image inputs alone do not classify a model as an image generator; unclassified models are marked in the category pickers. If the endpoint does not list models, open the category dropdown and use **Enter model ID manually**. The category comes from the picker you opened. Models can be selected before entering credentials; credentials are required when making requests.
+
+This provider supports Assistant, auxiliary text requests, and OpenAI-compatible image generation. The service must implement the OpenAI Responses protocol, including SSE streaming and the tool calls used by Codex. A service that implements only Chat Completions cannot drive this Assistant. Image models use `/images/generations`, or multipart `/images/edits` when reference images are supplied. The service must support the corresponding Images API. Video, music, and voice generation still use their own providers. Image understanding depends on the selected model's capabilities.
+
+For self-hosted use, `BILLING_MODE=OFF` disables the application's credit ledger and skips local model-price lookup during task preparation. Custom models do not need an entry in the platform price catalog in this mode. Generation confirmations and provider charges still apply. `SHADOW` and `ENFORCE` continue to require configured prices.
+
+This follows the custom provider contract described in [official OpenAI documentation (OpenAI Docs)](https://developers.openai.com/codex/config-advanced/). The application does not import the host's Codex configuration or login credentials. You configure the endpoint, key, and model here; the Assistant runtime receives only an internal project token, while the upstream key stays on the application server.
+
+For a model service running on the Mac host, use `http://host.lima.internal:PORT/v1` with Colima, or `http://host.docker.internal:PORT/v1` with Docker Desktop. `localhost` inside the application container refers to that container. Ensure the service listens on an address reachable from the VM/container; hostname resolution alone does not prove connectivity. If an outbound proxy is configured, add the chosen host to **both** `NO_PROXY` and `no_proxy` in the application's and Worker's environment, preserve existing entries, and recreate those containers. On Linux, use a reachable host address or configure Docker's host-gateway mapping.
+
+### Optional: start only the application with external dependencies
+
+When MySQL, Redis, Temporal, and S3/MinIO are hosted elsewhere, use the
+service-only launcher. It never starts bundled middleware:
+
+```sh
+# Source checkout: run `npm run build` first, with external services in .env
+sh scripts/start-service.sh
+
+# Development mode (Next.js dev server + Temporal Worker)
+sh scripts/start-service.sh dev
+
+# Web only / Worker only
+sh scripts/start-service.sh web
+sh scripts/start-service.sh worker
+```
+
+The script starts local Node processes only; it does not invoke Docker or
+Compose. It resolves `data/config/database.json` and
+`data/config/storage.json` first, then falls back to `DATABASE_URL` and
+`S3_*` environment variables.
+
+For a first installation, you may start with an empty database
+configuration and open `https://<host>/<locale>/setup` (for example
+`/zh/setup`). After saving the MySQL URL, restart the application so the
+schema push and new connection use it. Configure S3 after signing in from
+**Profile → System settings**. Set `WAO_SETUP_TOKEN` if you need to reopen
+the setup page after the database is already configured.
 
 ## 4. Backups and updates
 

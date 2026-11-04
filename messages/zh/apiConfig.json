@@ -49,7 +49,7 @@
   "modelDisplayName": "外显名称（你自己看的）",
   "modelActualId": "实际调用 ID（模型参数）",
   "noModelsForProvider": "该厂商暂无配置模型",
-  "providerPool": "服务商与模型",
+  "providerPool": "提供商配置",
   "dragToSort": "拖拽排序",
   "providerIdExists": "该提供商 ID 已存在",
   "presetProviderCannotDelete": "预设提供商不能删除",
@@ -58,6 +58,8 @@
   "confirmDeleteModel": "确定删除这个模型吗？",
   "baseUrl": "Base URL",
   "configureBaseUrl": "配置地址",
+  "responsesBaseUrlInvalid": "请填写有效的 HTTP(S) API 根地址，不要包含密钥、查询参数或 /responses 路径。",
+  "responsesProviderHint": "填写 API 根地址（如以 /v1 结尾）。Assistant 需支持 Responses API、流式输出和工具调用；图像生成需支持 Images API。保存后在上方选择模型。",
   "addModel": "添加模型",
   "openaiCompatVideoOnlyHint": "仅支持 OpenAI 官方格式的图生视频模型。",
   "typeText": "文本",
@@ -134,7 +136,7 @@
       "google_step1": "进入 Google AI Studio，创建 API Key"
     }
   },
-  "providerPoolHint": "在这里填写 API Key、添加自定义模型；配置后模型会出现在上方各类别的选择列表里。",
+  "providerPoolHint": "在这里配置地址和 API Key，模型会自动出现在上方对应类别的下拉框中。",
   "keyConfigured": "已配置 Key",
   "typeVoice": "音色",
   "modelSelectionRequired": "请选择一个模型",
@@ -153,7 +155,19 @@
     "voice": "音色模型"
   },
   "slotUnset": "未选择",
-  "slotEmpty": "请先在下方为服务商配置 API Key。",
+  "slotEmpty": "暂无支持此类别的提供商。",
   "inUse": "使用中",
-  "providerModelsCount": "模型 {count}"
+  "providerModelsCount": "模型 {count}",
+  "discovery": {
+    "fetch": "刷新模型列表",
+    "loading": "正在获取…",
+    "search": "搜索模型名称或 ID",
+    "noMatches": "没有匹配的模型，可手动填写模型 ID。",
+    "unknown": "未分类",
+    "fetchFailed": "获取失败，请检查地址、密钥及服务是否支持 /models，也可在上方模型下拉框内手动填写 ID。",
+    "typeConflict": "此模型 ID 已用于其他分类，请确认模型 ID。",
+    "available": "已获取 {count} 个模型，可在上方选择",
+    "manual": "手动填写模型 ID",
+    "provider": "提供商"
+  }
 }

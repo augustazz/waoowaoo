@@ -84,11 +84,13 @@ export function ProviderRowShell({
             type="button"
             onClick={() => onExpandChange(!expanded)}
             aria-expanded={expanded}
-            aria-label={t('providerModelsCount', { count: modelCount })}
+            aria-label={provider.editableBaseUrl ? t('configure') : t('providerModelsCount', { count: modelCount })}
             className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12px] text-[var(--glass-text-tertiary)] transition-colors hover:text-[var(--glass-text-secondary)]"
           >
-            <span className="hidden md:inline">{t('providerModelsCount', { count: modelCount })}</span>
-            <span className="md:hidden">{modelCount}</span>
+            {!provider.editableBaseUrl && <>
+              <span className="hidden md:inline">{t('providerModelsCount', { count: modelCount })}</span>
+              <span className="md:hidden">{modelCount}</span>
+            </>}
             <AppIcon name={expanded ? 'chevronUp' : 'chevronDown'} className="h-3.5 w-3.5" />
           </button>
         </div>

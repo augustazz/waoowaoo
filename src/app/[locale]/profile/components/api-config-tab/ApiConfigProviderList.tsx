@@ -20,6 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { AppIcon } from '@/components/ui/icons'
 import type { CustomModel, Provider } from '../api-config'
+import type { ProviderCardProps } from '../api-config/provider-card/types'
 import { ProviderCard } from '../api-config'
 
 interface DefaultModels {
@@ -32,6 +33,9 @@ interface ApiConfigProviderListProps {
   defaultModels: DefaultModels
   getModelsForProvider: (providerId: string) => CustomModel[]
   onUpdateApiKey: (providerId: string, apiKey: string) => void
+  onUpdateBaseUrl?: (providerId: string, baseUrl: string) => void
+  getDiscovery: (provider: Provider) => ProviderCardProps['discovery']
+  onRefreshModels: (providerId: string) => Promise<void>
   onReorderProviders: (activeProviderId: string, overProviderId: string) => void
   onDeleteModel: (modelKey: string, providerId: string) => void
   onUpdateModel: (modelKey: string, updates: Partial<CustomModel>, providerId: string) => void
@@ -80,6 +84,9 @@ export function ApiConfigProviderList(props: ApiConfigProviderListProps) {
       expanded={expandedProviderId === provider.id}
       onExpandChange={(expanded) => setExpandedProviderId(expanded ? provider.id : null)}
       onUpdateApiKey={props.onUpdateApiKey}
+      onUpdateBaseUrl={props.onUpdateBaseUrl}
+      discovery={props.getDiscovery(provider)}
+      onRefreshModels={() => props.onRefreshModels(provider.id)}
       onDeleteModel={(modelKey) => props.onDeleteModel(modelKey, provider.id)}
       onUpdateModel={(modelKey, updates) => props.onUpdateModel(modelKey, updates, provider.id)}
       onDeleteProvider={props.onDeleteProvider}

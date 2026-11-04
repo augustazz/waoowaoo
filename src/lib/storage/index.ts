@@ -1,6 +1,7 @@
 import { createScopedLogger } from '@/lib/logging/core'
 import { EXTERNAL_OPERATION } from '@/lib/external-operation/registry'
 import { withRetry } from '@/lib/retry'
+import { loadS3StorageConfig } from '@/lib/storage/s3-config'
 import { S3StorageProvider } from '@/lib/storage/providers/s3'
 import type {
   DeleteObjectsResult,
@@ -16,13 +17,21 @@ const storageLogger = createScopedLogger({
 })
 
 let providerSingleton: StorageProvider | null = null
+let providerFingerprint: string | null = null
 
-export function getStorageProvider(): StorageProvider {
-  if (!providerSingleton) {
-    providerSingleton = new S3StorageProvider()
+function loadProvider(): StorageProvider {
+  const config = loadS3StorageConfig()
+  const fingerprint = JSON.stringify(config)
+  if (!providerSingleton || providerFingerprint !== fingerprint) {
+    providerSingleton = new S3StorageProvider(config)
+    providerFingerprint = fingerprint
     storageLogger.info(`[Storage] provider initialized: ${providerSingleton.kind}`)
   }
   return providerSingleton
+}
+
+export function getStorageProvider(): StorageProvider {
+  return loadProvider()
 }
 
 export function getMediaObjectDelivery(): StorageProvider['mediaObjectDelivery'] {

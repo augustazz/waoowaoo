@@ -53,7 +53,6 @@ import {
 import { assertUserProviderConfigurationAvailable } from './availability'
 import { projectEffectiveMediaCapabilities } from '@/lib/ai-exec/media-input-transport'
 import {
-  filterEffectiveModels,
   hasStoredProviderCredential,
   assertSingleMediaModelSelections,
 } from './effective-config'
@@ -97,8 +96,7 @@ export async function getUserApiConfig(userId: string) {
   const defaultModels = billingMode === 'OFF'
     ? rawDefaults
     : sanitizeDefaultModelsForBilling(rawDefaults)
-  const effectiveModels = filterEffectiveModels(models, storedProviders)
-  const enabledDefaultModels = sanitizeDefaultModelsAgainstModels(defaultModels, effectiveModels)
+  const enabledDefaultModels = sanitizeDefaultModelsAgainstModels(defaultModels, models)
   const capabilityDefaults = parseStoredCapabilitySelections(pref?.capabilityDefaults, 'capabilityDefaults')
   validateCapabilitySelectionsAgainstModels(capabilityDefaults, models)
   const workflowConcurrency = getDeploymentFeatures(deployment).showWorkflowConcurrency ? normalizeWorkflowConcurrencyConfig({
@@ -234,10 +232,9 @@ export async function putUserApiConfig(
   const configuredModelSource = billingMode === 'OFF'
     ? (normalizedModels ?? existingModels)
     : sanitizeModelsForBilling(normalizedModels ?? existingModels)
-  const effectiveModelSource = filterEffectiveModels(configuredModelSource, nextProviders)
 
   if (normalizedDefaults !== undefined) {
-    validateDefaultModelsAgainstModels(normalizedDefaults, effectiveModelSource)
+    validateDefaultModelsAgainstModels(normalizedDefaults, configuredModelSource)
     if (billingMode !== 'OFF') {
       validateDefaultModelPricing(normalizedDefaults)
     }
@@ -247,7 +244,7 @@ export async function putUserApiConfig(
   }
 
   if (normalizedModels !== undefined) {
-    const cleanedDefaults = sanitizeDefaultModelsAgainstModels(nextDefaults, effectiveModelSource)
+    const cleanedDefaults = sanitizeDefaultModelsAgainstModels(nextDefaults, configuredModelSource)
     for (const field of Object.keys(cleanedDefaults) as Array<keyof DefaultModelsPayload>) {
       const cleanedValue = cleanedDefaults[field]
       if (cleanedValue === undefined) continue

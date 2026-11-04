@@ -8,7 +8,6 @@ import {
     CustomModel,
     encodeModelKey,
     getProviderKey,
-    isPresetComingSoonModelKey,
     resolvePresetProviderName,
 } from './types'
 import type { CapabilitySelections, UnifiedModelType } from '@/lib/ai-registry/types'
@@ -42,10 +41,12 @@ interface UseProvidersReturn {
     saveError: ApiConfigSaveError | null
     flushConfig: () => Promise<void>
     updateProviderApiKey: (providerId: string, apiKey: string) => void
+    updateProviderBaseUrl: (providerId: string, baseUrl: string) => void
     reorderProviders: (activeProviderId: string, overProviderId: string) => void
     deleteProvider: (providerId: string) => void
     selectSlotModel: (type: UnifiedModelType, modelKey: string) => void
     updateModel: (modelKey: string, updates: Partial<CustomModel>, providerId?: string) => void
+    selectDiscoveredModel: (model: Omit<CustomModel, 'enabled'>) => Promise<void>
     addModel: (model: Omit<CustomModel, 'enabled'>) => void
     deleteModel: (modelKey: string, providerId?: string) => void
     updateWorkflowConcurrency: (field: keyof WorkflowConcurrencyConfig, value: number) => void
@@ -105,11 +106,20 @@ export function useProviders(): UseProvidersReturn {
             name: resolvePresetProviderName(provider.id, provider.name, locale),
         }))
 
-        const savedProviders: Provider[] = data.providers || []
+        const visibleProviderKeys = new Set(catalogProviders.map((provider) => provider.id))
+        const savedProviders: Provider[] = (data.providers || []).filter((provider) => (
+            visibleProviderKeys.has(getProviderKey(provider.id))
+        ))
+        const savedModels = (data.models || []).filter((model) => (
+            visibleProviderKeys.has(getProviderKey(model.provider))
+        ))
         // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize editable drafts from the received server catalog snapshot.
         setProviders(mergeProvidersForDisplay(savedProviders, serverCatalogProviders))
-        setModels(mergeModelsForDisplay(data.models || [], catalogModels))
-        if (data.defaultModels) setDefaultModels(data.defaultModels)
+        const displayModels = mergeModelsForDisplay(savedModels, catalogModels)
+        setModels(displayModels)
+        if (data.defaultModels) {
+            setDefaultModels(clearMissingDefaultModels(data.defaultModels, new Set(displayModels.map((model) => model.modelKey))))
+        }
         setWorkflowConcurrency(parseWorkflowConcurrency(data.workflowConcurrency))
         if (data.capabilityDefaults && typeof data.capabilityDefaults === 'object') {
             setCapabilityDefaults(data.capabilityDefaults as CapabilitySelections)
@@ -145,6 +155,15 @@ export function useProviders(): UseProvidersReturn {
         latestWorkflowConcurrencyRef.current = next
         setWorkflowConcurrency(next)
         void performSave({ workflowConcurrency: next })
+    }, [performSave])
+
+    const updateProviderBaseUrl = useCallback((providerId: string, baseUrl: string) => {
+        const next = latestProvidersRef.current.map((provider) => (
+            provider.id === providerId ? { ...provider, baseUrl } : provider
+        ))
+        latestProvidersRef.current = next
+        setProviders(next)
+        void performSave()
     }, [performSave])
 
     // 提供商操作
@@ -214,14 +233,15 @@ export function useProviders(): UseProvidersReturn {
     }, [t, performSave, showToast])
 
     /**
-     * One action for every slot: the picked model becomes the only enabled model
-     * of its type, and the text slot additionally owns the Assistant selection.
+     * Text models stay configured when the Assistant selection changes.
+     * Media slots still execute exactly one model of each type.
      */
     const selectSlotModel = useCallback((type: UnifiedModelType, modelKey: string) => {
-        if (isPresetComingSoonModelKey(modelKey)) return
         if (modelKey && !latestModelsRef.current.some(model => model.modelKey === modelKey && model.type === type)) return
         const nextModels = latestModelsRef.current.map(model => model.type === type
-            ? { ...model, enabled: model.modelKey === modelKey }
+            ? { ...model, enabled: type === 'llm'
+                ? model.enabled || model.modelKey === modelKey
+                : model.modelKey === modelKey }
             : model)
         latestModelsRef.current = nextModels
         setModels(nextModels)
@@ -235,6 +255,24 @@ export function useProviders(): UseProvidersReturn {
             void performSave({ defaultModels: nextDefaults })
             return nextDefaults
         })
+    }, [performSave])
+
+    const selectDiscoveredModel = useCallback(async (model: Omit<CustomModel, 'enabled'>) => {
+        const modelKey = encodeModelKey(model.provider, model.modelId)
+        const existing = latestModelsRef.current.find(item => item.modelKey === modelKey)
+        if (existing && existing.type !== model.type) throw new Error('MODEL_TYPE_CONFLICT')
+        const next = latestModelsRef.current
+            .filter(item => item.modelKey !== modelKey)
+            .map(item => model.type !== 'llm' && item.type === model.type ? { ...item, enabled: false } : item)
+        next.push({ ...existing, ...model, modelKey, enabled: true })
+        latestModelsRef.current = next
+        setModels(next)
+        const defaults = model.type === 'llm'
+            ? { ...latestDefaultModelsRef.current, assistantModel: modelKey }
+            : latestDefaultModelsRef.current
+        latestDefaultModelsRef.current = defaults
+        setDefaultModels(defaults)
+        if (!await performSave({ defaultModels: defaults })) throw new Error('MODEL_SAVE_FAILED')
     }, [performSave])
 
     const updateModel = useCallback((modelKey: string, updates: Partial<CustomModel>, providerId?: string) => {
@@ -340,9 +378,11 @@ export function useProviders(): UseProvidersReturn {
         saveError,
         flushConfig,
         updateProviderApiKey,
+        updateProviderBaseUrl,
         reorderProviders,
         deleteProvider,
         selectSlotModel,
+        selectDiscoveredModel,
         updateModel,
         addModel,
         deleteModel,

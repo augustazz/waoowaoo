@@ -1,11 +1,11 @@
 x-dev-environment: &dev-environment
   NODE_ENV: development
   DATABASE_URL: "${COMPOSE_DATABASE_URL:?Set COMPOSE_DATABASE_URL in the selected development env file}"
-  REDIS_HOST: redis
-  REDIS_PORT: "6379"
-  REDIS_USERNAME: ""
-  REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD in the selected development env file}"
-  REDIS_TLS: ""
+  REDIS_HOST: "${REDIS_HOST:-redis}"
+  REDIS_PORT: "${REDIS_PORT:-6379}"
+  REDIS_USERNAME: "${REDIS_USERNAME:-}"
+  REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
+  REDIS_TLS: "${REDIS_TLS:-}"
   TEMPORAL_ADDRESS: temporal:7233
   TEMPORAL_NAMESPACE: "${TEMPORAL_NAMESPACE:-waoowaoo}"
   TEMPORAL_TASK_QUEUE: "${TEMPORAL_TASK_QUEUE:-waoowaoo-runtime}"
@@ -50,10 +50,13 @@ x-dev-service: &dev-service
   depends_on:
     mysql:
       condition: service_healthy
+      required: false
     redis:
       condition: service_healthy
+      required: false
     temporal-create-namespace:
       condition: service_completed_successfully
+      required: false
 
 services:
   codex-runtime-dev:
@@ -68,6 +71,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+        required: false
     command: ["sh", "-c", "npx prisma generate && npm run db:push"]
 
   app-dev:
@@ -99,8 +103,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+        required: false
       temporal-dev-route:
         condition: service_completed_successfully
+        required: false
     command: ["sh", "-c", "npm run storage:init && exec npm run dev:next"]
 
   temporal-worker-dev:
@@ -111,8 +117,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+        required: false
       temporal-create-namespace:
         condition: service_completed_successfully
+        required: false
     command:
       - /bin/sh
       - -ec

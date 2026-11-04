@@ -14,6 +14,7 @@ export interface ModelSlotOption {
   providerName: string
   providerHasKey: boolean
   comingSoon: boolean
+  unclassified?: boolean
 }
 
 export interface ModelSlotSelection {
@@ -27,6 +28,7 @@ interface UseApiConfigFiltersParams {
   providers: Provider[]
   models: CustomModel[]
   defaultModels: DefaultModels
+  availableModels?: (CustomModel & { unclassified?: boolean })[]
 }
 
 function hasProviderApiKey(provider: Provider | undefined): boolean {
@@ -36,7 +38,7 @@ function hasProviderApiKey(provider: Provider | undefined): boolean {
   return apiKey.length > 0
 }
 
-export function useApiConfigFilters({ providers, models, defaultModels }: UseApiConfigFiltersParams) {
+export function useApiConfigFilters({ providers, models, defaultModels, availableModels = [] }: UseApiConfigFiltersParams) {
   const providersById = useMemo(
     () => new Map(providers.map((provider) => [provider.id, provider] as const)),
     [providers],
@@ -44,13 +46,17 @@ export function useApiConfigFilters({ providers, models, defaultModels }: UseApi
 
   const modelProviders = useMemo(() => {
     const modelProviderIds = new Set(models.map((model) => model.provider))
-    return providers.filter((provider) => modelProviderIds.has(provider.id))
+    return providers.filter((provider) => modelProviderIds.has(provider.id) || provider.modelTypes?.length)
   }, [models, providers])
 
   /** Every model of a type, providers holding a key first so the pickable ones lead. */
   const slotOptionsByType = useMemo(() => {
     const grouped = new Map<UnifiedModelType, ModelSlotOption[]>()
-    for (const model of models) {
+    const configured = new Set(models.map(model => `${model.type}:${model.modelKey}`))
+    const configuredTypes = new Map(models.map(model => [model.modelKey, model.type]))
+    const choices = [...models, ...availableModels.filter(model => !configured.has(`${model.type}:${model.modelKey}`)
+      && (!configuredTypes.has(model.modelKey) || configuredTypes.get(model.modelKey) === model.type))]
+    for (const model of choices) {
       const provider = providersById.get(model.provider)
       const option: ModelSlotOption = {
         modelKey: model.modelKey,
@@ -59,6 +65,7 @@ export function useApiConfigFilters({ providers, models, defaultModels }: UseApi
         providerName: provider?.name || model.provider,
         providerHasKey: hasProviderApiKey(provider),
         comingSoon: isPresetComingSoonModelKey(model.modelKey),
+        unclassified: 'unclassified' in model && model.unclassified === true,
       }
       const bucket = grouped.get(model.type)
       if (bucket) bucket.push(option)
@@ -68,7 +75,7 @@ export function useApiConfigFilters({ providers, models, defaultModels }: UseApi
       options.sort((left, right) => Number(right.providerHasKey) - Number(left.providerHasKey))
     }
     return grouped
-  }, [models, providersById])
+  }, [models, availableModels, providersById])
 
   const enabledModels = useMemo(() => models.filter((model) => model.enabled), [models])
 

@@ -12,6 +12,9 @@ import { ApiConfigToolbar } from './ApiConfigToolbar'
 import { ApiConfigProviderList } from './ApiConfigProviderList'
 import { ModelSlotCard } from './ModelSlotCard'
 import { useApiConfigFilters } from './hooks/useApiConfigFilters'
+import { useProviderModelCatalog } from './hooks/useProviderModelCatalog'
+import { useToast } from '@/contexts/ToastContext'
+import type { UnifiedModelType } from '@/lib/ai-registry/types'
 
 export function ApiConfigTabContainer() {
   const locale = useLocale()
@@ -26,9 +29,12 @@ export function ApiConfigTabContainer() {
     saveStatus,
     saveError,
     updateProviderApiKey,
+    updateProviderBaseUrl,
     reorderProviders,
     deleteProvider,
     selectSlotModel,
+    selectDiscoveredModel,
+    flushConfig,
     deleteModel,
     addModel,
     updateModel,
@@ -38,6 +44,8 @@ export function ApiConfigTabContainer() {
 
   const t = useTranslations('apiConfig')
   const tc = useTranslations('common')
+  const { showToast } = useToast()
+  const { availableModels, refreshModels, getDiscovery } = useProviderModelCatalog({ providers, saveStatus, flushConfig })
   const saveFailedLabel = saveError?.code === 'PROVIDER_NOT_SUPPORTED' && saveError.providerId
     ? t('saveFailedProviderUnsupported', {
       provider: getProviderDisplayName(saveError.providerId, locale),
@@ -59,7 +67,18 @@ export function ApiConfigTabContainer() {
     getModelsForProvider,
     getSlotOptions,
     getSlotSelection,
-  } = useApiConfigFilters({ providers, models, defaultModels })
+  } = useApiConfigFilters({ providers, models, defaultModels, availableModels })
+
+  const handleSelect = (type: UnifiedModelType, modelKey: string) => {
+    if (!modelKey || models.some(model => model.modelKey === modelKey && model.type === type)) {
+      selectSlotModel(type, modelKey)
+      return
+    }
+    const model = availableModels.find(model => model.modelKey === modelKey && model.type === type)
+    if (model) void selectDiscoveredModel(model).catch(error => {
+      showToast(t(error instanceof Error && error.message === 'MODEL_TYPE_CONFLICT' ? 'discovery.typeConflict' : 'saveFailed'), 'error')
+    })
+  }
 
   const handleWorkflowConcurrencyChange = useCallback(
     (field: keyof WorkflowConcurrencyConfig, rawValue: string) => {
@@ -103,7 +122,9 @@ export function ApiConfigTabContainer() {
                 type={type}
                 options={getSlotOptions(type)}
                 selection={getSlotSelection(type)}
-                onSelect={selectSlotModel}
+                onSelect={handleSelect}
+                customProviders={providers.filter(provider => provider.editableBaseUrl && provider.modelTypes?.includes(type))}
+                onManualSelect={selectDiscoveredModel}
                 t={t}
                 fixedParameterFields={fixedParameterFields}
                 capabilityDefaults={capabilityDefaults}
@@ -122,6 +143,9 @@ export function ApiConfigTabContainer() {
             defaultModels={defaultModels}
             getModelsForProvider={getModelsForProvider}
             onUpdateApiKey={updateProviderApiKey}
+            onUpdateBaseUrl={updateProviderBaseUrl}
+            getDiscovery={getDiscovery}
+            onRefreshModels={refreshModels}
             onReorderProviders={reorderProviders}
             onDeleteModel={deleteModel}
             onUpdateModel={updateModel}

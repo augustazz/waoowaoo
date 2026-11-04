@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Navbar from '@/components/Navbar'
 import ApiConfigTab from './components/ApiConfigTab'
+import AdminSettingsTab from './components/AdminSettingsTab'
 import ProfileSidebar, { type ProfileSectionItem } from './components/ProfileSidebar'
 import type {
   ProfileBalanceSummary,
@@ -72,14 +73,23 @@ function isProjectCostDetailsPayload(value: unknown): value is ProjectCostDetail
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
-function getDefaultProfileSection(features: PublicDeploymentFeatures): ProfileSection {
+function getDefaultProfileSection(
+  features: PublicDeploymentFeatures,
+  isAdmin: boolean | null = false,
+): ProfileSection {
   if (features.showBilling) return 'overview'
   if (features.showAccountSecurity) return 'security'
   if (features.showApiConfig) return 'apiConfig'
+  if (isAdmin === true) return 'system'
   return 'overview'
 }
 
-function isProfileSectionEnabled(section: ProfileSection, features: PublicDeploymentFeatures): boolean {
+function isProfileSectionEnabled(
+  section: ProfileSection,
+  features: PublicDeploymentFeatures,
+  isAdmin: boolean | null,
+): boolean {
+  if (section === 'system') return isAdmin !== false
   if (section === 'security') return features.showAccountSecurity
   if (section === 'apiConfig') return features.showApiConfig
   return features.showBilling
@@ -100,6 +110,7 @@ function ProfilePageContent() {
 
   const [deploymentFeatures, setDeploymentFeatures] = useState<PublicDeploymentFeatures | null>(null)
   const [deploymentLoadFailed, setDeploymentLoadFailed] = useState(false)
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
   const [balance, setBalance] = useState<ProfileBalanceSummary | null>(null)
   const [transactions, setTransactions] = useState<ProfileTransactionItem[]>([])
   const [projectCosts, setProjectCosts] = useState<ProfileProjectCostSummary[]>([])
@@ -107,8 +118,8 @@ function ProfilePageContent() {
   const [userTimeZone, setUserTimeZone] = useState(DEFAULT_USER_TIME_ZONE)
   const isSigningOutRef = useRef(false)
   const activeSection = deploymentFeatures
-    && !isProfileSectionEnabled(urlSection, deploymentFeatures)
-    ? getDefaultProfileSection(deploymentFeatures)
+    && !isProfileSectionEnabled(urlSection, deploymentFeatures, isAdmin)
+    ? getDefaultProfileSection(deploymentFeatures, isAdmin)
     : urlSection
   const checkoutSucceeded = searchParams.get('payment') === 'success'
     || searchParams.get('plan') === 'success'
@@ -162,15 +173,34 @@ function ProfilePageContent() {
   }, [session])
 
   useEffect(() => {
-    if (!deploymentFeatures) return
-    if (isProfileSectionEnabled(urlSection, deploymentFeatures)) return
+    if (!session) return
+    let canceled = false
 
-    const nextSection = getDefaultProfileSection(deploymentFeatures)
+    const loadAdminStatus = async () => {
+      try {
+        const response = await apiFetch('/api/admin/status')
+        if (!canceled) setIsAdmin(response.ok)
+      } catch {
+        if (!canceled) setIsAdmin(false)
+      }
+    }
+
+    void loadAdminStatus()
+    return () => {
+      canceled = true
+    }
+  }, [session])
+
+  useEffect(() => {
+    if (!deploymentFeatures || isAdmin === null) return
+    if (isProfileSectionEnabled(urlSection, deploymentFeatures, isAdmin)) return
+
+    const nextSection = getDefaultProfileSection(deploymentFeatures, isAdmin)
     router.replace(
       { pathname: '/profile', query: { section: nextSection } },
       { scroll: false },
     )
-  }, [deploymentFeatures, router, urlSection])
+  }, [deploymentFeatures, isAdmin, router, urlSection])
 
   const loadBalance = useCallback(async () => {
     try {
@@ -279,6 +309,9 @@ function ProfilePageContent() {
     ...(deploymentFeatures?.showBilling === true
       ? [{ section: 'billing' as const, icon: 'receipt' as const, label: t('accountTransactions') }]
       : []),
+    ...(isAdmin === true
+      ? [{ section: 'system' as const, icon: 'settingsHexAlt' as const, label: t('systemSettings') }]
+      : []),
   ]
 
   const handleSectionChange = (section: ProfileSection) => {
@@ -326,6 +359,14 @@ function ProfilePageContent() {
             ) : activeSection === 'apiConfig' && deploymentFeatures.showApiConfig ? (
               <div className="glass-surface-elevated overflow-hidden">
                 <ApiConfigTab />
+              </div>
+            ) : activeSection === 'system' && isAdmin === true ? (
+              <div className="glass-surface-elevated overflow-hidden">
+                <AdminSettingsTab />
+              </div>
+            ) : activeSection === 'system' && isAdmin === null ? (
+              <div className="glass-surface-elevated flex min-h-64 items-center justify-center text-sm text-[var(--glass-text-secondary)]">
+                {tc('loading')}
               </div>
             ) : activeSection === 'overview' && showBilling ? (
               <ProfileOverviewSection
