@@ -13,6 +13,7 @@ export const DEFAULT_MODEL_FIELDS = ['assistantModel'] as const satisfies Readon
 export function createInitialProviders(presetProviders: Provider[]): Provider[] {
   return presetProviders.map((provider) => ({
     ...provider,
+    proxyUrl: '',
     apiKey: '',
     hasApiKey: false,
   }))
@@ -50,6 +51,7 @@ export function mergeProvidersForDisplay(
         name: savedProvider.id === matchedPreset.id ? matchedPreset.name : savedProvider.name,
         hasApiKey: savedProvider.hasApiKey === true,
         baseUrl: savedProvider.baseUrl || matchedPreset.baseUrl,
+        proxyUrl: savedProvider.proxyUrl ?? '',
       })
       seenPresetKeys.add(providerKey)
       continue
@@ -57,6 +59,7 @@ export function mergeProvidersForDisplay(
 
     merged.push({
       ...savedProvider,
+      proxyUrl: savedProvider.proxyUrl ?? '',
       apiKey: undefined,
       hasApiKey: savedProvider.hasApiKey === true,
     })
@@ -66,6 +69,7 @@ export function mergeProvidersForDisplay(
     if (seenPresetKeys.has(presetProvider.id)) continue
     merged.push({
       ...presetProvider,
+      proxyUrl: '',
       apiKey: '',
       hasApiKey: false,
     })

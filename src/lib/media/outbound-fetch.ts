@@ -1,13 +1,24 @@
 import net, { type LookupFunction } from 'node:net'
 import { lookup } from 'node:dns/promises'
-import { Agent, type Dispatcher } from 'undici'
+import { Agent, ProxyAgent, type Dispatcher } from 'undici'
 import { createFailureRecord, type FailureRecord } from '@/lib/errors/failure'
 import { EXTERNAL_OPERATION } from '@/lib/external-operation/registry'
+import { shouldProxyProviderUrl } from '@/lib/http/outbound-proxy'
 
 const DEFAULT_MAX_REDIRECTS = 3
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const TRUSTED_DNS_JSON_ENDPOINT = 'https://cloudflare-dns.com/dns-query'
 const MAX_DNS_JSON_BYTES = 64 * 1024
+const MEDIA_DOWNLOAD_DIRECT_PROBE_TIMEOUT_MS = 5_000
+const MEDIA_DOWNLOAD_REACHABILITY_TTL_MS = 60_000
+
+type MediaDownloadReachability = {
+  readonly reachable: boolean
+  readonly expiresAt: number
+}
+
+const mediaDownloadReachabilityCache = new Map<string, MediaDownloadReachability>()
+const mediaDownloadProxyDispatcherCache = new Map<string, ProxyAgent>()
 
 type RequestInitWithDispatcher = RequestInit & {
   dispatcher: Dispatcher
@@ -314,6 +325,85 @@ const safeOutboundDispatcher = new Agent({
   },
 })
 
+function readCachedMediaDownloadReachability(origin: string): boolean | null {
+  const cached = mediaDownloadReachabilityCache.get(origin)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    mediaDownloadReachabilityCache.delete(origin)
+    return null
+  }
+  return cached.reachable
+}
+
+function writeCachedMediaDownloadReachability(origin: string, reachable: boolean): void {
+  if (mediaDownloadReachabilityCache.size > 256) {
+    const now = Date.now()
+    for (const [key, entry] of mediaDownloadReachabilityCache) {
+      if (entry.expiresAt <= now) mediaDownloadReachabilityCache.delete(key)
+    }
+  }
+  mediaDownloadReachabilityCache.set(origin, {
+    reachable,
+    expiresAt: Date.now() + MEDIA_DOWNLOAD_REACHABILITY_TTL_MS,
+  })
+}
+
+function resolveMediaDownloadProxyDispatcher(proxyUrl: string): Dispatcher {
+  const cached = mediaDownloadProxyDispatcherCache.get(proxyUrl)
+  if (cached) return cached
+  const dispatcher = new ProxyAgent(proxyUrl)
+  mediaDownloadProxyDispatcherCache.set(proxyUrl, dispatcher)
+  return dispatcher
+}
+
+export function resetMediaDownloadReachabilityCacheForTest(): void {
+  mediaDownloadReachabilityCache.clear()
+}
+
+/**
+ * Probe the media origin over the normal direct path before deciding whether
+ * the actual result download needs the Provider proxy.
+ *
+ * Any HTTP response (including 403/405) proves the origin is reachable. Only a
+ * transport/DNS failure flips the result to false. SSRF policy failures are
+ * thrown instead of being downgraded to a proxy fallback.
+ */
+export async function probeSafeOutboundMediaDirectReachability(
+  input: string | URL,
+  options: {
+    readonly headers?: HeadersInit
+    readonly timeoutMs?: number
+    readonly signal?: AbortSignal
+  } = {},
+): Promise<boolean> {
+  const url = await assertSafeOutboundMediaUrl(input)
+  const cached = readCachedMediaDownloadReachability(url.origin)
+  if (cached !== null) return cached
+
+  const timeoutMs = options.timeoutMs ?? MEDIA_DOWNLOAD_DIRECT_PROBE_TIMEOUT_MS
+  const timeoutSignal = AbortSignal.timeout(Math.max(1, Math.trunc(timeoutMs)))
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeoutSignal])
+    : timeoutSignal
+  try {
+    const requestInit: RequestInitWithDispatcher = {
+      method: 'HEAD',
+      headers: new Headers(options.headers),
+      redirect: 'manual',
+      dispatcher: safeOutboundDispatcher,
+      signal,
+    }
+    const response = await fetch(url, requestInit)
+    await response.body?.cancel().catch(() => undefined)
+    writeCachedMediaDownloadReachability(url.origin, true)
+    return true
+  } catch (error) {
+    if (options.signal?.aborted) throw error
+    writeCachedMediaDownloadReachability(url.origin, false)
+    return false
+  }
+}
+
 function redirectHeaders(headers: Headers, from: URL, to: URL): Headers {
   const next = new Headers(headers)
   if (from.origin !== to.origin) {
@@ -330,6 +420,7 @@ export async function fetchSafeOutboundMedia(
     readonly headers?: HeadersInit
     readonly maxRedirects?: number
     readonly signal?: AbortSignal
+    readonly proxyUrl?: string | null
   } = {},
 ): Promise<Response> {
   const maxRedirects = options.maxRedirects ?? DEFAULT_MAX_REDIRECTS
@@ -337,6 +428,10 @@ export async function fetchSafeOutboundMedia(
     throw new Error('OUTBOUND_MEDIA_REDIRECT_LIMIT_INVALID')
   }
 
+  const proxyUrl = typeof options.proxyUrl === 'string' ? options.proxyUrl.trim() : ''
+  const dispatcher = proxyUrl
+    ? resolveMediaDownloadProxyDispatcher(proxyUrl)
+    : safeOutboundDispatcher
   let currentUrl = await assertSafeOutboundMediaUrl(input)
   let headers = new Headers(options.headers)
   for (let redirectCount = 0; ; redirectCount += 1) {
@@ -344,7 +439,7 @@ export async function fetchSafeOutboundMedia(
       method: 'GET',
       headers,
       redirect: 'manual',
-      dispatcher: safeOutboundDispatcher,
+      dispatcher,
       signal: options.signal,
     }
     const response = await fetch(currentUrl, requestInit)
@@ -366,4 +461,62 @@ export async function fetchSafeOutboundMedia(
     headers = redirectHeaders(headers, currentUrl, nextUrl)
     currentUrl = nextUrl
   }
+}
+
+/**
+ * Download a Provider-produced media result. Direct egress is preferred when
+ * the origin is reachable; otherwise the Provider proxy is used. A Provider
+ * proxy is never applied without a direct probe, and SSRF validation remains
+ * active on every redirect.
+ */
+export async function fetchSafeOutboundMediaWithProxyFallback(
+  input: string | URL,
+  options: {
+    readonly headers?: HeadersInit
+    readonly maxRedirects?: number
+    readonly signal?: AbortSignal
+    readonly proxyUrl?: string | null
+    readonly probeTimeoutMs?: number
+  } = {},
+): Promise<Response> {
+  const proxyUrl = typeof options.proxyUrl === 'string' ? options.proxyUrl.trim() : ''
+  if (!proxyUrl) return await fetchSafeOutboundMedia(input, options)
+  if (!shouldProxyProviderUrl(input)) {
+    return await fetchSafeOutboundMedia(input, { ...options, proxyUrl: null })
+  }
+
+  const reachable = await probeSafeOutboundMediaDirectReachability(input, {
+    headers: options.headers,
+    timeoutMs: options.probeTimeoutMs,
+    signal: options.signal,
+  })
+  if (reachable) {
+    try {
+      return await fetchSafeOutboundMedia(input, {
+        headers: options.headers,
+        maxRedirects: options.maxRedirects,
+        signal: options.signal,
+        proxyUrl: null,
+      })
+    } catch (error) {
+      if (options.signal?.aborted || error instanceof OutboundMediaSecurityError) throw error
+      // The probe is only a reachability check; the real GET can still fail.
+      // Remember the direct failure and fall through to the Provider proxy.
+      try {
+        writeCachedMediaDownloadReachability(
+          input instanceof URL ? input.origin : new URL(input).origin,
+          false,
+        )
+      } catch {
+        // Ignore cache bookkeeping for malformed input; validation already ran.
+      }
+    }
+  }
+
+  return await fetchSafeOutboundMedia(input, {
+    headers: options.headers,
+    maxRedirects: options.maxRedirects,
+    signal: options.signal,
+    proxyUrl,
+  })
 }

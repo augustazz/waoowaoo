@@ -14,6 +14,8 @@ const apiConfigInputSchema = z.object({
       .describe('Exact provider identity returned by get_user_api_config; unsupported identities fail.'),
     name: z.string().trim().min(1).describe('User-visible provider name.'),
     baseUrl: z.string().trim().min(1).optional().describe('Optional provider API base URL.'),
+    proxyUrl: z.string().optional()
+      .describe('Optional HTTP(S) proxy for this provider. Omit to preserve the stored proxy; pass an empty string to remove it.'),
     apiKey: z.string().optional()
       .describe('Provider API key. Omit to preserve the stored key; pass an empty string to remove it.'),
   }).strict()).optional(),

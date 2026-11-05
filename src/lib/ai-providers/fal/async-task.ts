@@ -4,6 +4,7 @@ import type {
   ParsedAsyncExternalId,
 } from '@/lib/ai-providers/async-task-types'
 import { normalizeAsyncPollResult } from '@/lib/ai-providers/async-task-types'
+import { withProviderProxyScope } from '@/lib/http/outbound-proxy'
 import { cancelFalTask, queryFalStatus } from './queue'
 
 function parseFalExternalId(externalId: string): ParsedAsyncExternalId {
@@ -42,9 +43,13 @@ export const falAsyncTaskProvider: AsyncTaskProviderRegistration = {
   parseExternalId: parseFalExternalId,
   formatExternalId: formatFalExternalId,
   poll: async ({ parsed, context }) => {
-    if (!parsed.endpoint) throw new Error('FAL_ENDPOINT_MISSING')
-    const { apiKey } = await context.getProviderConfig(context.userId, 'fal')
-    const result = await queryFalStatus(parsed.endpoint, parsed.requestId, apiKey)
+    const endpoint = parsed.endpoint
+    if (!endpoint) throw new Error('FAL_ENDPOINT_MISSING')
+    const { apiKey, proxyUrl } = await context.getProviderConfig(context.userId, 'fal')
+    const result = await withProviderProxyScope(
+      proxyUrl,
+      async () => await queryFalStatus(endpoint, parsed.requestId, apiKey),
+    )
     if (result.failed) {
       if (!result.failure) {
         throw new Error('FAL_FAILED_STATUS_CLASSIFICATION_REQUIRED')
@@ -69,8 +74,12 @@ export const falAsyncTaskProvider: AsyncTaskProviderRegistration = {
     })
   },
   cancel: async ({ parsed, context }) => {
-    if (!parsed.endpoint) throw new Error('FAL_ENDPOINT_MISSING')
-    const { apiKey } = await context.getProviderConfig(context.userId, 'fal')
-    await cancelFalTask(parsed.endpoint, parsed.requestId, apiKey)
+    const endpoint = parsed.endpoint
+    if (!endpoint) throw new Error('FAL_ENDPOINT_MISSING')
+    const { apiKey, proxyUrl } = await context.getProviderConfig(context.userId, 'fal')
+    await withProviderProxyScope(
+      proxyUrl,
+      async () => await cancelFalTask(endpoint, parsed.requestId, apiKey),
+    )
   },
 }

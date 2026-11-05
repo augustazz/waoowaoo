@@ -9,6 +9,7 @@ import type { TaskExecutionContext } from '../context'
 import {
   requireTaskProviderRouteSelection,
   resolveImageSourceFromGeneration,
+  resolveTaskProviderProxyUrl,
   uploadImageSourceToStorage,
 } from '../provider-media'
 
@@ -78,10 +79,11 @@ export async function handleWorkspaceResourceImageTask(
     'media:image:primary',
   )
   await reportTaskProgress(context, 90, { stage: 'workspace_resource_persist' })
+  const providerProxyUrl = await resolveTaskProviderProxyUrl(data.userId, providerRoute.provider)
   const stored = await uploadImageSourceToStorage(source, 'workspace-resource', payload.resource.resourceId, {
     taskId: data.taskId,
     artifact: `workspace-resource:${payload.resource.resourceId}`,
-  })
+  }, providerProxyUrl)
   const media = await ensureMediaObjectFromStorageKey(stored.storageKey, stored.metadata)
   return {
     mediaId: media.id,

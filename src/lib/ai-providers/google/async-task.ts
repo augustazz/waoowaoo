@@ -1,5 +1,6 @@
 import type { AsyncTaskProviderRegistration, ParsedAsyncExternalId } from '@/lib/ai-providers/async-task-types'
 import { normalizeAsyncPollResult } from '@/lib/ai-providers/async-task-types'
+import { withProviderProxyScope } from '@/lib/http/outbound-proxy'
 import { queryGeminiBatchStatus, queryGoogleVideoStatus } from './poll'
 
 function parseGeminiExternalId(externalId: string): ParsedAsyncExternalId {
@@ -37,8 +38,8 @@ export const geminiBatchAsyncTaskProvider: AsyncTaskProviderRegistration = {
   parseExternalId: parseGeminiExternalId,
   formatExternalId: (input) => `GEMINI:${input.type}:${input.requestId}`,
   poll: async ({ parsed, context }) => {
-    const { apiKey } = await context.getProviderConfig(context.userId, 'google')
-    const result = await queryGeminiBatchStatus(parsed.requestId, apiKey)
+    const { apiKey, proxyUrl } = await context.getProviderConfig(context.userId, 'google')
+    const result = await withProviderProxyScope(proxyUrl, async () => await queryGeminiBatchStatus(parsed.requestId, apiKey))
     return normalizeAsyncPollResult({
       status: result.status,
       ...(result.status === 'failed' ? { failure: result.failure } : {}),
@@ -55,8 +56,8 @@ export const googleVideoAsyncTaskProvider: AsyncTaskProviderRegistration = {
   parseExternalId: parseGoogleExternalId,
   formatExternalId: (input) => `GOOGLE:${input.type}:${input.requestId}`,
   poll: async ({ parsed, context }) => {
-    const { apiKey } = await context.getProviderConfig(context.userId, 'google')
-    const result = await queryGoogleVideoStatus(parsed.requestId, apiKey)
+    const { apiKey, proxyUrl } = await context.getProviderConfig(context.userId, 'google')
+    const result = await withProviderProxyScope(proxyUrl, async () => await queryGoogleVideoStatus(parsed.requestId, apiKey))
     return normalizeAsyncPollResult({
       status: result.status,
       ...(result.status === 'failed' ? { failure: result.failure } : {}),

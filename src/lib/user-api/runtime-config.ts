@@ -264,6 +264,7 @@ export async function getProviderConfig(userId: string, providerId: string): Pro
     name: provider.name,
     apiKey: decryptApiKey(provider.apiKey),
     baseUrl: normalizeProviderRuntimeBaseUrl(provider.id, provider.baseUrl),
+    ...(provider.proxyUrl ? { proxyUrl: provider.proxyUrl } : {}),
   }
 }
 

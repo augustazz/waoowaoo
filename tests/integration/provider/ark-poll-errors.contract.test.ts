@@ -4,6 +4,7 @@ const fetchMock = vi.hoisted(() => vi.fn<typeof fetch>())
 
 vi.mock('@/lib/http/outbound-proxy', () => ({
   fetchWithProviderProxy: fetchMock,
+  withProviderProxyScope: async (_proxyUrl: string | undefined, operation: () => Promise<unknown>) => await operation(),
 }))
 
 const { querySeedanceVideoStatus } = await import('@/lib/ai-providers/ark/poll')

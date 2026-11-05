@@ -161,6 +161,7 @@ export type AiLlmProviderConfig = {
   name: string
   apiKey: string
   baseUrl?: string
+  proxyUrl?: string
 }
 
 export type AiLlmExecutionInput = {

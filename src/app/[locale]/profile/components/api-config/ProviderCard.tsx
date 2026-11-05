@@ -18,6 +18,8 @@ export function ProviderCard({
   onExpandChange,
   onUpdateApiKey,
   onUpdateBaseUrl,
+  onUpdateProxyUrl,
+  onUpdateProviderName,
   discovery,
   onRefreshModels,
   onDeleteModel,
@@ -45,11 +47,18 @@ export function ProviderCard({
       expanded={expanded}
       onExpandChange={onExpandChange}
       onDeleteProvider={onDeleteProvider}
+      onUpdateProviderName={onUpdateProviderName}
       modelCount={models.length}
       t={t}
       state={state}
     >
-      <ProviderBaseFields provider={provider} t={t} state={state} onUpdateBaseUrl={onUpdateBaseUrl} />
+      <ProviderBaseFields
+        provider={provider}
+        t={t}
+        state={state}
+        onUpdateBaseUrl={onUpdateBaseUrl}
+        onUpdateProxyUrl={onUpdateProxyUrl}
+      />
       {provider.editableBaseUrl && (
         <ProviderModelDiscovery
           provider={provider}

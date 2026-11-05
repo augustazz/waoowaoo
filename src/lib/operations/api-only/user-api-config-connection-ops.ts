@@ -13,6 +13,7 @@ const providerDiagnosticInputSchema = z.object({
   apiType: z.string().trim().min(1),
   apiKey: z.string().trim().min(1).optional(),
   baseUrl: z.string().trim().min(1).optional(),
+  proxyUrl: z.string().trim().min(1).optional(),
   llmModel: z.string().trim().min(1).optional(),
 }).strict()
 
@@ -84,6 +85,7 @@ export function createUserApiConfigConnectionDiagnosticOperations(): ProjectAgen
           apiType: parsed.apiType,
           apiKey: parsed.apiKey ?? storedProvider?.apiKey ?? '',
           baseUrl: parsed.baseUrl ?? storedProvider?.baseUrl,
+          proxyUrl: parsed.proxyUrl ?? storedProvider?.proxyUrl,
           llmModel: parsed.llmModel,
         }
         const result = await testProviderConnection(payload)

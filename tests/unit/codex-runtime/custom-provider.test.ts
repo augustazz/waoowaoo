@@ -20,7 +20,10 @@ vi.mock('@/lib/prisma', () => ({
     },
   },
 }))
-vi.mock('@/lib/http/outbound-proxy', () => ({ fetchWithProviderProxy: mocks.fetch }))
+vi.mock('@/lib/http/outbound-proxy', () => ({
+  fetchWithProviderProxy: mocks.fetch,
+  withProviderProxyScope: async (_proxyUrl: string | undefined, operation: () => Promise<unknown>) => await operation(),
+}))
 vi.mock('@/lib/codex-model-gateway/active-turn-guard', () => ({
   requireCodexModelGatewayModelActiveTurn: vi.fn(async () => ({ turnId: 'turn-1', attempt: 1 })),
 }))
@@ -95,6 +98,28 @@ describe('custom Responses provider', () => {
       providers: [{ id: 'openai-compatible', name: 'Test provider', baseUrl: 'http://localhost:9922/api' }],
     })
     expect(await resolveCodexModelGatewayUpstream(scope)).toMatchObject({ providerApiKey: apiKey, responsesEndpoint: 'http://localhost:9922/api/responses' })
+  })
+
+  it('persists a per-provider proxy and preserves it when omitted from later saves', async () => {
+    await configure()
+    await putUserApiConfig(scope.userId, {
+      providers: [{ id: 'openai-compatible', name: 'Test provider', baseUrl, proxyUrl: 'http://127.0.0.1:7890' }],
+    })
+    expect((await getUserApiConfig(scope.userId)).providers).toEqual([{
+      id: 'openai-compatible',
+      name: 'Test provider',
+      baseUrl,
+      proxyUrl: 'http://127.0.0.1:7890',
+      hasApiKey: true,
+    }])
+    expect(await resolveCodexModelGatewayUpstream(scope)).toMatchObject({
+      providerProxyUrl: 'http://127.0.0.1:7890',
+    })
+
+    await putUserApiConfig(scope.userId, {
+      providers: [{ id: 'openai-compatible', name: 'Test provider', baseUrl }],
+    })
+    expect((await getUserApiConfig(scope.userId)).providers[0]?.proxyUrl).toBe('http://127.0.0.1:7890')
   })
 
   it('keeps upstream credentials out of the Codex runtime configuration', async () => {

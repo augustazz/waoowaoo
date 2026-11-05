@@ -26,6 +26,35 @@ function normalizeProviderBaseUrl(value: string, field: string, providerId: stri
   }
 }
 
+function normalizeProviderProxyUrl(value: string, field: string): string {
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('PROTOCOL_INVALID')
+    const serialized = parsed.toString()
+    // `new URL('http://host:7890').toString()` appends the root path slash.
+    // Keep origin-only proxy URLs exactly as entered; non-root paths keep theirs.
+    return parsed.pathname === '/' && !parsed.search && !parsed.hash
+      ? serialized.replace(/\/$/, '')
+      : serialized
+  } catch {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'PROVIDER_PROXY_URL_INVALID',
+      field,
+    })
+  }
+}
+
+function readStoredProxyUrl(value: unknown): string | undefined {
+  const trimmed = readTrimmedString(value)
+  if (!trimmed) return undefined
+  try {
+    return normalizeProviderProxyUrl(trimmed, 'customProviders.proxyUrl')
+  } catch {
+    // Old/corrupt values should not make the whole config page unreadable.
+    return trimmed
+  }
+}
+
 export function resolveProviderByIdOrKey(
   providers: readonly StoredProvider[],
   providerId: string,
@@ -84,11 +113,24 @@ export function normalizeProvidersInput(rawProviders: unknown): StoredProvider[]
     const baseUrl = rawBaseUrl
       ? normalizeProviderBaseUrl(rawBaseUrl, `providers[${index}].baseUrl`, normalizedId)
       : undefined
+    // undefined preserves the stored proxy; an empty string clears it.
+    const rawProxyUrl = item.proxyUrl
+    if (rawProxyUrl !== undefined && typeof rawProxyUrl !== 'string') {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'PROVIDER_PROXY_URL_INVALID',
+        field: `providers[${index}].proxyUrl`,
+      })
+    }
+    const trimmedProxyUrl = rawProxyUrl === undefined ? undefined : rawProxyUrl.trim()
+    const proxyUrl = trimmedProxyUrl === undefined
+      ? undefined
+      : (trimmedProxyUrl ? normalizeProviderProxyUrl(trimmedProxyUrl, `providers[${index}].proxyUrl`) : '')
 
     normalized.push({
       id,
       name,
       baseUrl,
+      proxyUrl,
       apiKey: typeof item.apiKey === 'string' ? item.apiKey.trim() : undefined,
     })
   }
@@ -136,11 +178,13 @@ export function parseStoredProviders(rawProviders: string | null | undefined): S
     assertSupportedProvider(id, `customProviders[${index}].id`)
 
     const baseUrl = readTrimmedString(raw.baseUrl) || undefined
+    const proxyUrl = readStoredProxyUrl(raw.proxyUrl)
 
     normalized.push({
       id,
       name,
       baseUrl,
+      proxyUrl,
       apiKey: typeof raw.apiKey === 'string' ? raw.apiKey.trim() : undefined,
     })
   }

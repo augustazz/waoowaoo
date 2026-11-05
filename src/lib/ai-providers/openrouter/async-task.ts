@@ -1,5 +1,6 @@
 import type { AsyncTaskProviderRegistration, ParsedAsyncExternalId } from '@/lib/ai-providers/async-task-types'
 import { normalizeAsyncPollResult } from '@/lib/ai-providers/async-task-types'
+import { withProviderProxyScope } from '@/lib/http/outbound-proxy'
 import { queryOpenRouterVideoStatus } from './video'
 
 function parseOpenRouterExternalId(externalId: string): ParsedAsyncExternalId {
@@ -23,15 +24,15 @@ export const openRouterAsyncTaskProvider: AsyncTaskProviderRegistration = {
   parseExternalId: parseOpenRouterExternalId,
   formatExternalId: (input) => `OPENROUTER:${input.type}:${input.requestId}`,
   poll: async ({ parsed, context }) => {
-    const { apiKey, baseUrl } = await context.getProviderConfig(context.userId, 'openrouter')
+    const { apiKey, baseUrl, proxyUrl } = await context.getProviderConfig(context.userId, 'openrouter')
     if (!baseUrl) {
       throw new Error('PROVIDER_BASE_URL_MISSING: openrouter (video)')
     }
-    const result = await queryOpenRouterVideoStatus({
+    const result = await withProviderProxyScope(proxyUrl, async () => await queryOpenRouterVideoStatus({
       baseUrl,
       apiKey,
       requestId: parsed.requestId,
-    })
+    }))
     return normalizeAsyncPollResult({
       status: result.status,
       ...(result.status === 'failed' ? { failure: result.failure } : {}),

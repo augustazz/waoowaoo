@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readRequestBufferWithLimit } from '@/lib/http/body-limits'
-import { fetchWithProviderProxy } from '@/lib/http/outbound-proxy'
+import { fetchWithProviderProxy, withProviderProxyScope } from '@/lib/http/outbound-proxy'
 import { createScopedLogger } from '@/lib/logging/core'
 import {
   CODEX_MODEL_GATEWAY_ASSISTANT_ID,
@@ -403,17 +403,20 @@ export async function proxyCodexResponsesRequest(params: {
 
   let response: Response
   try {
-    response = await fetchWithProviderProxy(upstream.responsesEndpoint, {
-      method: 'POST',
-      headers: {
-        Accept: accept,
-        Authorization: `Bearer ${upstream.providerApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: new Uint8Array(body),
-      redirect: 'error',
-      signal: params.request.signal,
-    })
+    response = await withProviderProxyScope(
+      upstream.providerProxyUrl,
+      async () => await fetchWithProviderProxy(upstream.responsesEndpoint, {
+        method: 'POST',
+        headers: {
+          Accept: accept,
+          Authorization: `Bearer ${upstream.providerApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: new Uint8Array(body),
+        redirect: 'error',
+        signal: params.request.signal,
+      }),
+    )
   } catch (error: unknown) {
     if (params.request.signal.aborted) {
       await cancelCodexProviderAttempt(providerAttempt)

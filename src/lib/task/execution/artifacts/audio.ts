@@ -1,6 +1,6 @@
 import { decodeBase64WithLimit, MAX_AUDIO_BYTES, readResponseBufferWithLimit } from '@/lib/http/body-limits'
 import { EXTERNAL_OPERATION } from '@/lib/external-operation/registry'
-import { fetchSafeOutboundMedia } from '@/lib/media/outbound-fetch'
+import { fetchSafeOutboundMediaWithProxyFallback } from '@/lib/media/outbound-fetch'
 import { withRetry } from '@/lib/retry'
 import { toFetchableUrl } from '@/lib/storage'
 
@@ -33,6 +33,7 @@ export async function loadGeneratedAudio(input: {
   mimeType?: string
   label: string
   errorPrefix: string
+  proxyUrl?: string | null
 }): Promise<{ buffer: Buffer; mimeType: string }> {
   const explicitMimeType = readString(input.mimeType) || 'audio/mpeg'
   if (input.audioBase64) {
@@ -51,7 +52,9 @@ export async function loadGeneratedAudio(input: {
     operation: EXTERNAL_OPERATION.MEDIA_DOWNLOAD,
     scope: 'media:generated-audio-download',
     run: async () => {
-      const response = await fetchSafeOutboundMedia(toFetchableUrl(dataUrl))
+      const response = await fetchSafeOutboundMediaWithProxyFallback(toFetchableUrl(dataUrl), {
+        proxyUrl: input.proxyUrl,
+      })
       if (!response.ok) {
         throw new Error(`${input.errorPrefix}_AUDIO_DOWNLOAD_FAILED:${response.status}`)
       }

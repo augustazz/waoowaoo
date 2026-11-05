@@ -82,6 +82,7 @@ export async function getUserApiConfig(userId: string) {
     id: provider.id,
     name: provider.name,
     baseUrl: provider.baseUrl,
+    ...(provider.proxyUrl ? { proxyUrl: provider.proxyUrl } : {}),
     hasApiKey: hasStoredProviderCredential(provider),
   }))
 
@@ -196,11 +197,16 @@ export async function putUserApiConfig(
     } else {
       finalApiKey = encryptApiKey(provider.apiKey)
     }
+    // Same update semantics as the API key: omitted preserves, empty clears.
+    const finalProxyUrl = provider.proxyUrl === undefined
+      ? existing?.proxyUrl
+      : (provider.proxyUrl || undefined)
 
     return {
       id: provider.id,
       name: provider.name,
       baseUrl: provider.baseUrl,
+      proxyUrl: finalProxyUrl,
       apiKey: finalApiKey,
     }
   })

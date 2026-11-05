@@ -4,19 +4,24 @@ import type { ProviderCardProps, ProviderCardTranslator } from './types'
 import type { UseProviderCardStateResult } from './hooks/useProviderCardState'
 import { AppIcon } from '@/components/ui/icons'
 import { ProviderEndpointField } from './ProviderEndpointField'
+import { ProviderProxyField } from './ProviderProxyField'
 
 interface ProviderBaseFieldsProps {
   provider: ProviderCardProps['provider']
   t: ProviderCardTranslator
   state: UseProviderCardStateResult
   onUpdateBaseUrl?: ProviderCardProps['onUpdateBaseUrl']
+  onUpdateProxyUrl?: ProviderCardProps['onUpdateProxyUrl']
 }
 
-export function ProviderBaseFields({ provider, t, state, onUpdateBaseUrl }: ProviderBaseFieldsProps) {
+export function ProviderBaseFields({ provider, t, state, onUpdateBaseUrl, onUpdateProxyUrl }: ProviderBaseFieldsProps) {
   return (
     <div className="space-y-2 px-4 pt-3">
       {provider.editableBaseUrl && onUpdateBaseUrl && (
         <ProviderEndpointField provider={provider} t={t} onUpdate={onUpdateBaseUrl} />
+      )}
+      {onUpdateProxyUrl && (
+        <ProviderProxyField provider={provider} t={t} onUpdate={onUpdateProxyUrl} />
       )}
       <div className="glass-surface-soft flex items-center gap-3 rounded-xl px-3 py-2">
         <span className="shrink-0 text-xs font-medium text-[var(--glass-text-secondary)]">

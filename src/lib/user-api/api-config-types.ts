@@ -18,6 +18,7 @@ export interface StoredProvider {
   id: string
   name: string
   baseUrl?: string
+  proxyUrl?: string
   apiKey?: string
 }
 

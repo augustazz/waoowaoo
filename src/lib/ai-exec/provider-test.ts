@@ -2,6 +2,7 @@ import {
   runRegisteredProviderOperation,
   tryResolveAiProviderAdapter,
 } from '@/lib/ai-providers'
+import { withProviderProxyScope } from '@/lib/http/outbound-proxy'
 import type {
   AiProviderConnectionTestReport,
   AiProviderConnectionTestStep,
@@ -15,6 +16,7 @@ export type TestProviderResult = AiProviderConnectionTestReport
 type TestProviderPayload = {
   apiType: string
   baseUrl?: string
+  proxyUrl?: string
   apiKey: string
   llmModel?: string
 }
@@ -40,10 +42,13 @@ export async function testProviderConnection(payload: TestProviderPayload): Prom
   return await runRegisteredProviderOperation({
     providerId: adapter.providerKey,
     phase: 'connection',
-    run: async () => await diagnose({
-      apiKey,
-      baseUrl: payload.baseUrl,
-      llmModel: payload.llmModel,
-    }),
+    run: async () => await withProviderProxyScope(
+      payload.proxyUrl,
+      async () => await diagnose({
+        apiKey,
+        baseUrl: payload.baseUrl,
+        llmModel: payload.llmModel,
+      }),
+    ),
   })
 }

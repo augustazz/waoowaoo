@@ -34,6 +34,9 @@ interface ApiConfigProviderListProps {
   getModelsForProvider: (providerId: string) => CustomModel[]
   onUpdateApiKey: (providerId: string, apiKey: string) => void
   onUpdateBaseUrl?: (providerId: string, baseUrl: string) => void
+  onUpdateProxyUrl?: (providerId: string, proxyUrl: string) => void
+  onUpdateProviderName?: (providerId: string, name: string) => void
+  onAddProvider: () => string
   getDiscovery: (provider: Provider) => ProviderCardProps['discovery']
   onRefreshModels: (providerId: string) => Promise<void>
   onReorderProviders: (activeProviderId: string, overProviderId: string) => void
@@ -46,6 +49,7 @@ interface ApiConfigProviderListProps {
     providerPoolHint: string
     dragToSort: string
     moreProviders: string
+    addProvider: string
   }
 }
 
@@ -66,7 +70,9 @@ export function ApiConfigProviderList(props: ApiConfigProviderListProps) {
   }, [props])
 
   const extensionProviders = useMemo(
-    () => modelProviders.filter((provider) => provider.featured !== true && !provider.hasApiKey),
+    () => modelProviders.filter((provider) => (
+      provider.featured !== true && !provider.hasApiKey && !provider.id.includes(':')
+    )),
     [modelProviders],
   )
   const primaryProviders = useMemo(() => {
@@ -85,6 +91,8 @@ export function ApiConfigProviderList(props: ApiConfigProviderListProps) {
       onExpandChange={(expanded) => setExpandedProviderId(expanded ? provider.id : null)}
       onUpdateApiKey={props.onUpdateApiKey}
       onUpdateBaseUrl={props.onUpdateBaseUrl}
+      onUpdateProxyUrl={props.onUpdateProxyUrl}
+      onUpdateProviderName={props.onUpdateProviderName}
       discovery={props.getDiscovery(provider)}
       onRefreshModels={() => props.onRefreshModels(provider.id)}
       onDeleteModel={(modelKey) => props.onDeleteModel(modelKey, provider.id)}
@@ -96,14 +104,27 @@ export function ApiConfigProviderList(props: ApiConfigProviderListProps) {
 
   return (
     <div id="provider-pool-section" className="space-y-4 scroll-mt-6">
-      <div className="flex items-center gap-2.5">
-        <span className="glass-surface-soft inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--glass-text-secondary)]">
-          <AppIcon name="cube" className="h-4 w-4" />
-        </span>
-        <div>
-          <h2 className="text-xl font-bold text-[var(--glass-text-primary)]">{labels.providerPool}</h2>
-          <p className="mt-1 text-[13px] text-[var(--glass-text-secondary)]">{labels.providerPoolHint}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="glass-surface-soft inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--glass-text-secondary)]">
+            <AppIcon name="cube" className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="text-xl font-bold text-[var(--glass-text-primary)]">{labels.providerPool}</h2>
+            <p className="mt-1 text-[13px] text-[var(--glass-text-secondary)]">{labels.providerPoolHint}</p>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            const providerId = props.onAddProvider()
+            setExpandedProviderId(providerId)
+          }}
+          className="glass-btn-base glass-btn-soft shrink-0 px-3 py-1.5 text-xs"
+        >
+          <AppIcon name="plus" className="h-3.5 w-3.5" />
+          {labels.addProvider}
+        </button>
       </div>
       <div className="glass-surface glass-card-shadow-soft overflow-hidden rounded-2xl">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

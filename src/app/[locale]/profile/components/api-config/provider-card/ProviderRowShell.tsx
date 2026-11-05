@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AppIcon } from '@/components/ui/icons'
 import type { ProviderCardProps, ProviderCardTranslator } from './types'
@@ -12,6 +13,7 @@ interface ProviderRowShellProps {
   expanded: boolean
   onExpandChange: ProviderCardProps['onExpandChange']
   onDeleteProvider: ProviderCardProps['onDeleteProvider']
+  onUpdateProviderName?: ProviderCardProps['onUpdateProviderName']
   modelCount: number
   t: ProviderCardTranslator
   state: UseProviderCardStateResult
@@ -25,12 +27,34 @@ export function ProviderRowShell({
   expanded,
   onExpandChange,
   onDeleteProvider,
+  onUpdateProviderName,
   modelCount,
   t,
   state,
   children,
 }: ProviderRowShellProps) {
   const configured = !!provider.hasApiKey
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(provider.name)
+  const canRename = !state.isPresetProvider && !!onUpdateProviderName
+
+  const startEditName = () => {
+    setNameDraft(provider.name)
+    setIsEditingName(true)
+  }
+
+  const saveName = () => {
+    const trimmed = nameDraft.trim()
+    if (!trimmed) return
+    onUpdateProviderName?.(provider.id, trimmed)
+    setIsEditingName(false)
+  }
+
+  const cancelEditName = () => {
+    setNameDraft(provider.name)
+    setIsEditingName(false)
+  }
+
   return (
     <div className="border-b border-[var(--glass-stroke-base)] last:border-b-0">
       <div className="flex items-center gap-3 px-3 py-2.5">
@@ -39,18 +63,51 @@ export function ProviderRowShell({
           aria-hidden="true"
           className={`h-2 w-2 shrink-0 rounded-full ${configured ? 'bg-[var(--glass-tone-success-fg)]' : 'bg-[var(--glass-stroke-strong)]'}`}
         />
-        <button
-          type="button"
-          onClick={() => onExpandChange(!expanded)}
-          aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left"
-        >
-          <span className="truncate text-[15px] font-bold text-[var(--glass-text-primary)]">{provider.name}</span>
-          <span className="hidden shrink-0 text-[12px] text-[var(--glass-text-tertiary)] sm:inline">
-            {configured ? t('keyConfigured') : t('notConfigured')}
-          </span>
-        </button>
+        {isEditingName && canRename ? (
+          <form
+            className="flex min-w-0 flex-1 items-center gap-2"
+            onSubmit={(event) => { event.preventDefault(); saveName() }}
+          >
+            <input
+              value={nameDraft}
+              onChange={(event) => setNameDraft(event.target.value)}
+              aria-label={t('providerNamePlaceholder')}
+              placeholder={t('providerNamePlaceholder')}
+              className="glass-input-base min-w-0 flex-1 px-2 py-1 text-sm"
+              autoFocus
+            />
+            <button type="submit" className="glass-icon-btn-sm" aria-label={t('save')}>
+              <AppIcon name="check" className="h-4 w-4" />
+            </button>
+            <button type="button" className="glass-icon-btn-sm" aria-label={t('cancel')} onClick={cancelEditName}>
+              <AppIcon name="close" className="h-4 w-4" />
+            </button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onExpandChange(!expanded)}
+            aria-expanded={expanded}
+            className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left"
+          >
+            <span className="truncate text-[15px] font-bold text-[var(--glass-text-primary)]">{provider.name}</span>
+            <span className="hidden shrink-0 text-[12px] text-[var(--glass-text-tertiary)] sm:inline">
+              {configured ? t('keyConfigured') : t('notConfigured')}
+            </span>
+          </button>
+        )}
         <div className="flex shrink-0 items-center gap-1.5">
+          {canRename && !isEditingName && (
+            <button
+              type="button"
+              onClick={startEditName}
+              className="glass-icon-btn-sm"
+              title={t('renameProvider')}
+              aria-label={t('renameProvider')}
+            >
+              <AppIcon name="editSquare" className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => { onExpandChange(true); state.startEditKey() }}

@@ -3,6 +3,7 @@ import {
   runRegisteredProviderOperation,
   tryResolveAiProviderAdapter,
 } from '@/lib/ai-providers'
+import { withProviderProxyScope } from '@/lib/http/outbound-proxy'
 import type { AiProviderLlmConnectionInput, AiProviderLlmConnectionResult } from '@/lib/ai-providers/runtime-types'
 
 export interface LlmConnectionTestResult {
@@ -16,6 +17,7 @@ type TestConnectionPayload = {
   provider?: string
   apiKey?: string
   baseUrl?: string
+  proxyUrl?: string
   model?: string
 }
 
@@ -51,11 +53,14 @@ export async function testLlmConnection(payload: TestConnectionPayload): Promise
   const tested = await runRegisteredProviderOperation({
     providerId: provider,
     phase: 'connection',
-    run: async () => await testLlm({
-      apiKey: requireApiKey(payload),
-      baseUrl: typeof payload.baseUrl === 'string' ? payload.baseUrl.trim() : undefined,
-      model: typeof payload.model === 'string' ? payload.model.trim() : undefined,
-    }),
+    run: async () => await withProviderProxyScope(
+      payload.proxyUrl,
+      async () => await testLlm({
+        apiKey: requireApiKey(payload),
+        baseUrl: typeof payload.baseUrl === 'string' ? payload.baseUrl.trim() : undefined,
+        model: typeof payload.model === 'string' ? payload.model.trim() : undefined,
+      }),
+    ),
   })
 
   return {

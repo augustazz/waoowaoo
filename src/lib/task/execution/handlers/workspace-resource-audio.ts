@@ -10,7 +10,7 @@ import { musicScoreGenerationOptionsSchema } from '@/lib/music/score-specificati
 import { extensionFromAudioMimeType, loadGeneratedAudio } from '../artifacts/audio'
 import { reportTaskProgress } from '../progress'
 import type { TaskExecutionContext } from '../context'
-import { requireTaskProviderRouteSelection } from '../provider-media'
+import { requireTaskProviderRouteSelection, resolveTaskProviderProxyUrl } from '../provider-media'
 
 export async function handleWorkspaceResourceAudioTask(context: TaskExecutionContext) {
   const { data } = context
@@ -41,12 +41,14 @@ export async function handleWorkspaceResourceAudioTask(context: TaskExecutionCon
   const providerRoute = await requireTaskProviderRouteSelection(context, invocationKey)
 
   await reportTaskProgress(context, 85, { stage: 'persist_music' })
+  const providerProxyUrl = await resolveTaskProviderProxyUrl(data.userId, providerRoute.provider)
   const audio = await loadGeneratedAudio({
     audioBase64: generated.audioBase64,
     audioUrl: generated.audioUrl,
     mimeType: generated.audioMimeType,
     label: 'generated music',
     errorPrefix: 'MUSIC_GENERATE',
+    proxyUrl: providerProxyUrl,
   })
   const storageKey = await uploadObject(
     audio.buffer,

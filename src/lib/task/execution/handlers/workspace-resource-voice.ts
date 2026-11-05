@@ -7,7 +7,11 @@ import { buildTaskArtifactStorageKey } from '@/lib/task/artifact-storage'
 import { extensionFromAudioMimeType, loadGeneratedAudio } from '../artifacts/audio'
 import { reportTaskProgress } from '../progress'
 import type { TaskExecutionContext } from '../context'
-import { assertTaskActive, requireTaskProviderRouteSelection } from '../provider-media'
+import {
+  assertTaskActive,
+  requireTaskProviderRouteSelection,
+  resolveTaskProviderProxyUrl,
+} from '../provider-media'
 
 function readRequiredString(value: unknown, field: string): string {
   if (typeof value !== 'string' || !value.trim()) {
@@ -55,12 +59,14 @@ export async function handleWorkspaceResourceVoiceTask(context: TaskExecutionCon
   const providerRoute = await requireTaskProviderRouteSelection(context, invocationKey)
 
   await reportTaskProgress(context, 85, { stage: 'persist_voice' })
+  const providerProxyUrl = await resolveTaskProviderProxyUrl(data.userId, providerRoute.provider)
   const audio = await loadGeneratedAudio({
     audioBase64: generated.audioBase64,
     audioUrl: generated.audioUrl,
     mimeType: generated.audioMimeType,
     label: 'generated voice',
     errorPrefix: 'VOICE_GENERATE',
+    proxyUrl: providerProxyUrl,
   })
   const extension = extensionFromAudioMimeType(audio.mimeType)
   const durationMs = await probeMediaBufferDurationMs({

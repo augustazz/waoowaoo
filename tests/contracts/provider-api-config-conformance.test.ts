@@ -59,6 +59,43 @@ describe('API config provider registry conformance', () => {
     }
   })
 
+  it('normalizes per-provider proxy overrides and distinguishes clear from preserve', () => {
+    const [configured] = normalizeProvidersInput([{
+      id: 'openai-compatible',
+      name: 'Custom API',
+      proxyUrl: 'http://127.0.0.1:7890',
+    }])
+    expect(configured?.proxyUrl).toBe('http://127.0.0.1:7890')
+
+    const [cleared] = normalizeProvidersInput([{
+      id: 'openai-compatible',
+      name: 'Custom API',
+      proxyUrl: '',
+    }])
+    expect(cleared?.proxyUrl).toBe('')
+
+    const [omitted] = normalizeProvidersInput([{
+      id: 'openai-compatible',
+      name: 'Custom API',
+    }])
+    expect(omitted?.proxyUrl).toBeUndefined()
+
+    try {
+      normalizeProvidersInput([{
+        id: 'openai-compatible',
+        name: 'Custom API',
+        proxyUrl: 'socks5://127.0.0.1:1080',
+      }])
+      throw new Error('EXPECTED_PROVIDER_PROXY_URL_INVALID')
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ApiError)
+      expect((error as ApiError).details).toMatchObject({
+        code: 'PROVIDER_PROXY_URL_INVALID',
+        field: 'providers[0].proxyUrl',
+      })
+    }
+  })
+
   it('continues to reject identities outside the production catalog', () => {
     try {
       normalizeProvidersInput([{ id: 'unknown-provider', name: 'Unknown' }])

@@ -3,7 +3,7 @@ import sharp from 'sharp'
 import { generateUniqueKey, toFetchableUrl, uploadObject } from '@/lib/storage'
 import { buildTaskArtifactStorageKey } from '@/lib/task/artifact-storage'
 import { decodeBase64WithLimit, MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, readResponseBufferWithLimit } from '@/lib/http/body-limits'
-import { fetchSafeOutboundMedia } from '@/lib/media/outbound-fetch'
+import { fetchSafeOutboundMediaWithProxyFallback } from '@/lib/media/outbound-fetch'
 import { detectMimeFromBuffer } from '@/lib/media/media-mime'
 import { probeVideoBufferFacts } from '@/lib/media/probe-video'
 import { probeMediaBufferDurationMs } from '@/lib/media/probe-duration'
@@ -17,6 +17,7 @@ export interface ProcessMediaOptions {
   keyPrefix: string
   targetId: string
   downloadHeaders?: Record<string, string>
+  proxyUrl?: string | null
   taskArtifact?: { taskId: string; artifact: string }
 }
 
@@ -61,7 +62,7 @@ export async function inspectStoredMedia(stored: Buffer, type: ProcessMediaOptio
 }
 
 export async function processMediaResult(options: ProcessMediaOptions) {
-  const { source, type, keyPrefix, targetId, downloadHeaders } = options
+  const { source, type, keyPrefix, targetId, downloadHeaders, proxyUrl } = options
   const maxBytes = type === 'image' ? MAX_IMAGE_BYTES : type === 'video' ? MAX_VIDEO_BYTES : MAX_AUDIO_BYTES
   let buffer: Buffer
   if (Buffer.isBuffer(source)) buffer = source
@@ -74,7 +75,10 @@ export async function processMediaResult(options: ProcessMediaOptions) {
       operation: EXTERNAL_OPERATION.MEDIA_DOWNLOAD,
       scope: `media:${type}-result-download`,
       run: async () => {
-        const response = await fetchSafeOutboundMedia(toFetchableUrl(source), { headers: downloadHeaders })
+        const response = await fetchSafeOutboundMediaWithProxyFallback(toFetchableUrl(source), {
+          headers: downloadHeaders,
+          proxyUrl,
+        })
         if (!response.ok) throw new Error(`Failed to download ${type}: ${response.status} ${response.statusText}`)
         return await readResponseBufferWithLimit(response, maxBytes, `${type} result`)
       },

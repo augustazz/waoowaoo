@@ -11,6 +11,7 @@ import type {
   ChatMessage,
 } from '@/lib/ai-registry/types'
 import { getProviderConfig, resolveModelSelection, resolveFrozenModelSelection } from '@/lib/user-api/runtime-config'
+import { withProviderProxyScope } from '@/lib/http/outbound-proxy'
 import {
   resolveAiProviderAdapter,
   runRegisteredProviderOperation,
@@ -235,13 +236,16 @@ export async function executeMediaGeneration(
         provider: routeSelection.provider,
         modelKey: routeSelection.modelKey,
         request: createMediaProviderRequestIdentity({ ...input, modelKey: routeSelection.modelKey }),
-        execute: async () => await modalityAdapter.execute({
-          userId: executionInput.userId,
-          providerConfig: await getProviderConfig(executionInput.userId, routeSelection.provider),
-          selection: routeSelection,
-          prompt: executionInput.prompt,
-          options,
-        }),
+        execute: async () => {
+          const providerConfig = await getProviderConfig(executionInput.userId, routeSelection.provider)
+          return await withProviderProxyScope(providerConfig.proxyUrl, async () => await modalityAdapter.execute({
+            userId: executionInput.userId,
+            providerConfig,
+            selection: routeSelection,
+            prompt: executionInput.prompt,
+            options,
+          }))
+        },
       }
     }
     case 'video': {
@@ -259,13 +263,16 @@ export async function executeMediaGeneration(
         provider: routeSelection.provider,
         modelKey: routeSelection.modelKey,
         request: createMediaProviderRequestIdentity({ ...input, modelKey: routeSelection.modelKey }),
-        execute: async () => await modalityAdapter.execute({
-          userId: executionInput.userId,
-          providerConfig: await getProviderConfig(executionInput.userId, routeSelection.provider),
-          selection: routeSelection,
-          imageUrl: executionInput.imageUrl,
-          options,
-        }),
+        execute: async () => {
+          const providerConfig = await getProviderConfig(executionInput.userId, routeSelection.provider)
+          return await withProviderProxyScope(providerConfig.proxyUrl, async () => await modalityAdapter.execute({
+            userId: executionInput.userId,
+            providerConfig,
+            selection: routeSelection,
+            imageUrl: executionInput.imageUrl,
+            options,
+          }))
+        },
       }
     }
     case 'music': {
@@ -284,13 +291,16 @@ export async function executeMediaGeneration(
         provider: routeSelection.provider,
         modelKey: routeSelection.modelKey,
         request: createMediaProviderRequestIdentity({ ...input, modelKey: routeSelection.modelKey }),
-        execute: async () => await modalityAdapter.execute({
-          userId: executionInput.userId,
-          providerConfig: await getProviderConfig(executionInput.userId, routeSelection.provider),
-          selection: routeSelection,
-          generation: executionInput.generation,
-          options,
-        }),
+        execute: async () => {
+          const providerConfig = await getProviderConfig(executionInput.userId, routeSelection.provider)
+          return await withProviderProxyScope(providerConfig.proxyUrl, async () => await modalityAdapter.execute({
+            userId: executionInput.userId,
+            providerConfig,
+            selection: routeSelection,
+            generation: executionInput.generation,
+            options,
+          }))
+        },
       }
     }
     case 'voice': {
@@ -308,14 +318,17 @@ export async function executeMediaGeneration(
         provider: routeSelection.provider,
         modelKey: routeSelection.modelKey,
         request: createMediaProviderRequestIdentity({ ...input, modelKey: routeSelection.modelKey }),
-        execute: async () => await modalityAdapter.execute({
-          userId: executionInput.userId,
-          providerConfig: await getProviderConfig(executionInput.userId, routeSelection.provider),
-          selection: routeSelection,
-          description: executionInput.description,
-          text: executionInput.text,
-          options,
-        }),
+        execute: async () => {
+          const providerConfig = await getProviderConfig(executionInput.userId, routeSelection.provider)
+          return await withProviderProxyScope(providerConfig.proxyUrl, async () => await modalityAdapter.execute({
+            userId: executionInput.userId,
+            providerConfig,
+            selection: routeSelection,
+            description: executionInput.description,
+            text: executionInput.text,
+            options,
+          }))
+        },
       }
     }
     }

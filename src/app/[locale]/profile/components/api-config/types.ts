@@ -38,6 +38,7 @@ export interface Provider {
     id: string
     name: string
     baseUrl?: string
+    proxyUrl?: string
     editableBaseUrl?: boolean
     apiKey?: string
     hasApiKey?: boolean

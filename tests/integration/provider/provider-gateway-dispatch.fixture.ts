@@ -8,6 +8,7 @@ beforeEach(() => fetchMock.mockReset())
 
 vi.mock('@/lib/http/outbound-proxy', () => ({
   fetchWithProviderProxy: fetchMock,
+  withProviderProxyScope: async (_proxyUrl: string | undefined, operation: () => Promise<unknown>) => await operation(),
 }))
 
 function jsonResponse(body: unknown, status = 200): Response {

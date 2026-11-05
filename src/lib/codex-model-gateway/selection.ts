@@ -124,6 +124,7 @@ async function resolveSelectedAssistantModel(scope: CodexModelGatewayScope) {
     selection,
     providerKey: manifest.providerKey,
     providerApiKey: providerConfig.apiKey,
+    ...(providerConfig.proxyUrl ? { providerProxyUrl: providerConfig.proxyUrl } : {}),
     responsesEndpoint: buildResponsesEndpoint(providerBaseUrl),
   }
 }
@@ -137,6 +138,7 @@ export async function resolveCodexModelGatewayUpstream(
   readonly modelKey: string
   readonly responsesEndpoint: string
   readonly providerApiKey: string
+  readonly providerProxyUrl?: string
 }> {
   const scope = normalizeCodexModelGatewayScope(scopeValue)
   const resolved = await resolveSelectedAssistantModel(scope)
@@ -147,6 +149,7 @@ export async function resolveCodexModelGatewayUpstream(
     modelKey: resolved.selection.modelKey,
     responsesEndpoint: resolved.responsesEndpoint,
     providerApiKey: resolved.providerApiKey,
+    ...(resolved.providerProxyUrl ? { providerProxyUrl: resolved.providerProxyUrl } : {}),
   }
 }
 

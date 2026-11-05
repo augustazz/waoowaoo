@@ -8,6 +8,7 @@ import { reportTaskProgress } from '../progress'
 import type { TaskExecutionContext } from '../context'
 import {
   requireTaskProviderRouteSelection,
+  resolveTaskProviderProxyUrl,
   resolveVideoSourceFromGeneration,
   uploadVideoSourceToStorage,
 } from '../provider-media'
@@ -140,12 +141,14 @@ export async function handleWorkspaceResourceVideoTask(
     'media:video:primary',
   )
   await reportTaskProgress(context, 90, { stage: 'workspace_resource_persist' })
+  const providerProxyUrl = await resolveTaskProviderProxyUrl(data.userId, providerRoute.provider)
   const stored = await uploadVideoSourceToStorage(
     generated.url,
     'workspace-resource',
     payload.resource.resourceId,
     generated.downloadHeaders,
     { taskId: data.taskId, artifact: `workspace-resource:${payload.resource.resourceId}` },
+    providerProxyUrl,
   )
   const media = await ensureMediaObjectFromStorageKey(stored.storageKey, stored.metadata)
   return {

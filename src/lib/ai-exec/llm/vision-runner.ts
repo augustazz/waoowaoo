@@ -18,6 +18,7 @@ import {
 import { describeLlmVariantBase } from '@/lib/ai-exec/llm-descriptor'
 import { normalizeAiOptions } from '@/lib/ai-exec/normalize'
 import { resolveAiProviderAdapter } from '@/lib/ai-providers'
+import { withProviderProxyScope } from '@/lib/http/outbound-proxy'
 import { emitStreamStage, resolveStreamStepMeta } from '@/lib/ai-providers/shared/llm-support'
 import { normalizeReferenceImagesForGeneration } from '@/lib/media/outbound-image'
 import { resolveReasoningEffort } from '@/lib/ai-exec/reasoning-effort'
@@ -97,19 +98,22 @@ async function executeVision(input: {
   })
   const startedAt = Date.now()
   try {
-    const result = await runAiSdkLanguageModel({
-      providerKey,
-      selection,
-      providerConfig,
-      modelMessages: buildVisionModelMessages(input.textPrompt, normalizedImageUrls),
-      reasoning,
-      reasoningEffort,
-      modality: 'vision',
-      executionMode: input.stream ? 'stream' : 'sync',
-      openRouterSessionId,
-      options,
-      callbacks: input.callbacks,
-    })
+    const result = await withProviderProxyScope(
+      providerConfig.proxyUrl,
+      async () => await runAiSdkLanguageModel({
+        providerKey,
+        selection,
+        providerConfig,
+        modelMessages: buildVisionModelMessages(input.textPrompt, normalizedImageUrls),
+        reasoning,
+        reasoningEffort,
+        modality: 'vision',
+        executionMode: input.stream ? 'stream' : 'sync',
+        openRouterSessionId,
+        options,
+        callbacks: input.callbacks,
+      }),
+    )
     logLlmRawOutput({
       userId: input.userId,
       projectId,

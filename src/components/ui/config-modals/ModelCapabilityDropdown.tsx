@@ -19,7 +19,7 @@ import { AppIcon, RatioPreviewIcon } from '@/components/ui/icons'
 import { GlassNumberStepper, GlassSelect } from '@/components/ui/primitives'
 import {
     groupModelCapabilityOptions,
-    resolveSelectedModelProviderLabel,
+    resolveSelectedModelProviderKey,
 } from './model-capability-groups'
 
 // ─── Types ────────────────────────────────────────────
@@ -252,15 +252,15 @@ export function ModelCapabilityDropdown({
         () => groupModelCapabilityOptions(models.filter(model => !searchPlaceholder || `${model.label} ${model.value}`.toLowerCase().includes(search.trim().toLowerCase())), fallbackProviderLabel),
         [models, fallbackProviderLabel, search, searchPlaceholder],
     )
-    const selectedProviderLabel = useMemo(
-        () => resolveSelectedModelProviderLabel(models, value, fallbackProviderLabel),
+    const selectedProviderKey = useMemo(
+        () => resolveSelectedModelProviderKey(models, value, fallbackProviderLabel),
         [models, value, fallbackProviderLabel],
     )
 
     useLayoutEffect(() => {
         if (!isOpen) return
         selectedProviderGroupRef.current?.scrollIntoView({ block: 'start' })
-    }, [isOpen, selectedProviderLabel])
+    }, [isOpen, selectedProviderKey])
 
     const resolveCapabilityLabel = useCallback((field: CapabilityFieldDefinition): string => {
         try {
@@ -358,10 +358,10 @@ export function ModelCapabilityDropdown({
                         {providerGroups.length === 0 && emptyLabel && (
                             <p className="px-3 py-3 text-xs text-[var(--glass-text-tertiary)]">{emptyLabel}</p>
                         )}
-                        {providerGroups.map(([providerLabel, groupModels]) => (
+                        {providerGroups.map(({ key: providerKey, label: providerLabel, models: groupModels }) => (
                             <div
-                                key={providerLabel}
-                                ref={providerLabel === selectedProviderLabel ? selectedProviderGroupRef : undefined}
+                                key={providerKey}
+                                ref={providerKey === selectedProviderKey ? selectedProviderGroupRef : undefined}
                                 className="mb-1"
                             >
                                 <div className="sticky top-0 z-10 px-2 pt-2 pb-1 bg-white/80 dark:bg-[#1c1c1e]/80 backdrop-blur-md">

@@ -19,6 +19,7 @@ import { ensureAiCatalogsRegistered } from '@/lib/ai-exec/catalog-bootstrap'
 import { describeLlmVariantBase } from '@/lib/ai-exec/llm-descriptor'
 import { normalizeAiOptions } from '@/lib/ai-exec/normalize'
 import { resolveAiProviderAdapter } from '@/lib/ai-providers'
+import { withProviderProxyScope } from '@/lib/http/outbound-proxy'
 import { emitStreamStage, resolveStreamStepMeta } from '@/lib/ai-providers/shared/llm-support'
 import { resolveReasoningEffort } from '@/lib/ai-exec/reasoning-effort'
 import { prepareAiTextModelMessages } from '@/lib/ai-exec/language-model'
@@ -134,20 +135,23 @@ async function executeText(input: {
   const resolved = await resolveTextExecution(input)
   const startedAt = Date.now()
   try {
-    const result = await runAiSdkLanguageModel({
-      providerKey: resolved.providerKey,
-      selection: resolved.selection,
-      providerConfig: resolved.providerConfig,
-      modelMessages: prepareAiTextModelMessages(resolved.selection.provider, input.messages),
-      sourceMessages: input.messages,
-      reasoning: resolved.reasoning,
-      reasoningEffort: resolved.reasoningEffort,
-      modality: 'llm',
-      executionMode: input.stream ? 'stream' : 'sync',
-      openRouterSessionId: resolved.openRouterSessionId,
-      options: resolved.options,
-      callbacks: input.callbacks,
-    })
+    const result = await withProviderProxyScope(
+      resolved.providerConfig.proxyUrl,
+      async () => await runAiSdkLanguageModel({
+        providerKey: resolved.providerKey,
+        selection: resolved.selection,
+        providerConfig: resolved.providerConfig,
+        modelMessages: prepareAiTextModelMessages(resolved.selection.provider, input.messages),
+        sourceMessages: input.messages,
+        reasoning: resolved.reasoning,
+        reasoningEffort: resolved.reasoningEffort,
+        modality: 'llm',
+        executionMode: input.stream ? 'stream' : 'sync',
+        openRouterSessionId: resolved.openRouterSessionId,
+        options: resolved.options,
+        callbacks: input.callbacks,
+      }),
+    )
     logTextResult({ userId: input.userId, resolved, result, stream: input.stream })
     llmLogger.info({
       action: 'llm.call.success',

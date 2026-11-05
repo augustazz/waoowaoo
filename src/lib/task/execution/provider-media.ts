@@ -27,6 +27,8 @@ import { AppError } from '@/lib/errors/app-error'
 import { reportTaskProgress } from './progress'
 import type { TaskExecutionContext } from './context'
 import { parseModelKeyStrict } from '@/lib/ai-registry/selection'
+import { resolveOutboundProxyUrl } from '@/lib/http/outbound-proxy'
+import { getProviderConfig } from '@/lib/user-api/runtime-config'
 import {
   resolveProviderVideoReferencePayload,
   type VideoReferenceImageInput,
@@ -44,6 +46,21 @@ export async function requireTaskProviderRouteSelection(
     throw new Error(`TASK_PROVIDER_ROUTE_SELECTION_MISSING:${context.data.taskId}:${invocationKey}`)
   }
   return route
+}
+
+export async function resolveTaskProviderProxyUrl(
+  userId: string,
+  providerId: string,
+): Promise<string | null> {
+  try {
+    const config = await getProviderConfig(userId, providerId)
+    const providerProxyUrl = typeof config.proxyUrl === 'string' ? config.proxyUrl.trim() : ''
+    return providerProxyUrl || resolveOutboundProxyUrl()
+  } catch {
+    // Proxy lookup is best-effort. A removed or changed provider config must not
+    // block downloading a media result that was already generated.
+    return resolveOutboundProxyUrl()
+  }
 }
 
 function summarizeImageGenerationOptions(
@@ -476,12 +493,14 @@ export async function uploadImageSourceToStorage(
   keyPrefix: string,
   targetId: string,
   taskArtifact?: { taskId: string; artifact: string },
+  proxyUrl?: string | null,
 ) {
   return await processMediaResult({
     source,
     type: 'image',
     keyPrefix,
     targetId,
+    proxyUrl,
     taskArtifact,
   })
 }
@@ -492,6 +511,7 @@ export async function uploadVideoSourceToStorage(
   targetId: string,
   downloadHeaders?: Record<string, string>,
   taskArtifact?: { taskId: string; artifact: string },
+  proxyUrl?: string | null,
 ) {
   return await processMediaResult({
     source,
@@ -499,6 +519,7 @@ export async function uploadVideoSourceToStorage(
     keyPrefix,
     targetId,
     downloadHeaders,
+    proxyUrl,
     taskArtifact,
   })
 }

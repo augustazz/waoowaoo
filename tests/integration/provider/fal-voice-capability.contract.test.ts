@@ -14,7 +14,10 @@ import { listPlatformCatalogModels } from '@/lib/platform-models/catalog'
 
 const fetchMock = vi.hoisted(() => vi.fn<typeof fetch>())
 
-vi.mock('@/lib/http/outbound-proxy', () => ({ fetchWithProviderProxy: fetchMock }))
+vi.mock('@/lib/http/outbound-proxy', () => ({
+  fetchWithProviderProxy: fetchMock,
+  withProviderProxyScope: async (_proxyUrl: string | undefined, operation: () => Promise<unknown>) => await operation(),
+}))
 const FAL_PROVIDER_CONFIG = { id: 'fal', name: 'FAL', apiKey: 'test-fal-key' }
 
 const selection = {

@@ -1,9 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Dispatcher } from 'undici'
-
-type ProxyDispatcherCache = {
-  proxyUrl: string
-  dispatcher: Dispatcher
-}
 
 // Node's built-in fetch accepts an undici dispatcher via this extra init
 // field; the DOM-typed RequestInit just doesn't declare it.
@@ -11,7 +7,10 @@ type RequestInitWithDispatcher = RequestInit & {
   dispatcher: Dispatcher
 }
 
-let proxyDispatcherCache: ProxyDispatcherCache | null = null
+// Provider invocations can run concurrently, so a per-provider proxy override
+// must be scoped to the current async call chain rather than stored globally.
+const providerProxyScope = new AsyncLocalStorage<string>()
+const proxyDispatcherCache = new Map<string, Dispatcher>()
 
 function readTrimmedEnv(name: string): string | null {
   const value = process.env[name]
@@ -26,6 +25,9 @@ function readNoProxyEntries(): string[] {
 }
 
 export function resolveOutboundProxyUrl(): string | null {
+  const scoped = providerProxyScope.getStore()
+  if (scoped) return scoped
+
   return readTrimmedEnv('PROXY_URL')
     ?? readTrimmedEnv('HTTPS_PROXY')
     ?? readTrimmedEnv('https_proxy')
@@ -33,6 +35,19 @@ export function resolveOutboundProxyUrl(): string | null {
     ?? readTrimmedEnv('http_proxy')
     ?? readTrimmedEnv('ALL_PROXY')
     ?? readTrimmedEnv('all_proxy')
+}
+
+/**
+ * Run a provider invocation with an optional per-provider proxy override.
+ * When the override is absent or empty the global proxy env fallback is used.
+ */
+export async function withProviderProxyScope<T>(
+  proxyUrl: string | null | undefined,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const trimmed = typeof proxyUrl === 'string' ? proxyUrl.trim() : ''
+  if (!trimmed) return await operation()
+  return await providerProxyScope.run(trimmed, operation)
 }
 
 function readFetchInputUrl(input: RequestInfo | URL): string | null {
@@ -103,15 +118,16 @@ export function shouldProxyProviderUrl(input: RequestInfo | URL): boolean {
   }
 }
 
-async function resolveProxyDispatcher(): Promise<ProxyDispatcherCache | null> {
+async function resolveProxyDispatcher(): Promise<Dispatcher | null> {
   const proxyUrl = resolveOutboundProxyUrl()
   if (!proxyUrl) return null
-  if (proxyDispatcherCache?.proxyUrl === proxyUrl) return proxyDispatcherCache
+  const cached = proxyDispatcherCache.get(proxyUrl)
+  if (cached) return cached
 
   const { ProxyAgent } = await import('undici')
   const dispatcher = new ProxyAgent(proxyUrl)
-  proxyDispatcherCache = { proxyUrl, dispatcher }
-  return proxyDispatcherCache
+  proxyDispatcherCache.set(proxyUrl, dispatcher)
+  return dispatcher
 }
 
 export async function fetchWithProviderProxy(
@@ -126,7 +142,7 @@ export async function fetchWithProviderProxy(
   // identity, silently serialising multipart bodies to nothing on the wire.
   const requestInit: RequestInitWithDispatcher = {
     ...(init ?? {}),
-    dispatcher: proxy.dispatcher,
+    dispatcher: proxy,
   }
   return await fetch(input, requestInit)
 }
@@ -141,7 +157,7 @@ export async function withProviderProxyDispatcher<T>(
 
   const { getGlobalDispatcher, setGlobalDispatcher } = await import('undici')
   const previousDispatcher = getGlobalDispatcher()
-  setGlobalDispatcher(proxy.dispatcher)
+  setGlobalDispatcher(proxy)
   try {
     return await operation()
   } finally {

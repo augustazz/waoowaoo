@@ -3,6 +3,7 @@ import { logError as _ulogError } from '@/lib/logging/core'
 import { useLocale, useTranslations } from 'next-intl'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { OPENAI_COMPATIBLE_PROVIDER_KEY } from '@/lib/ai-providers/openai-compatible/config'
 import {
     Provider,
     CustomModel,
@@ -42,6 +43,9 @@ interface UseProvidersReturn {
     flushConfig: () => Promise<void>
     updateProviderApiKey: (providerId: string, apiKey: string) => void
     updateProviderBaseUrl: (providerId: string, baseUrl: string) => void
+    updateProviderProxyUrl: (providerId: string, proxyUrl: string) => void
+    updateProviderName: (providerId: string, name: string) => void
+    addProvider: () => string
     reorderProviders: (activeProviderId: string, overProviderId: string) => void
     deleteProvider: (providerId: string) => void
     selectSlotModel: (type: UnifiedModelType, modelKey: string) => void
@@ -52,6 +56,13 @@ interface UseProvidersReturn {
     updateWorkflowConcurrency: (field: keyof WorkflowConcurrencyConfig, value: number) => void
     updateCapabilityDefault: (modelKey: string, field: string, value: string | number | boolean | null) => void
     getModelsByType: (type: CustomModel['type']) => CustomModel[]
+}
+
+function createProviderInstanceId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID()
+    }
+    return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 }
 
 export function useProviders(): UseProvidersReturn {
@@ -164,6 +175,63 @@ export function useProviders(): UseProvidersReturn {
         latestProvidersRef.current = next
         setProviders(next)
         void performSave()
+    }, [performSave])
+
+      const updateProviderProxyUrl = useCallback((providerId: string, proxyUrl: string) => {
+        const next = latestProvidersRef.current.map((provider) => (
+            provider.id === providerId ? { ...provider, proxyUrl } : provider
+        ))
+        latestProvidersRef.current = next
+        setProviders(next)
+        void performSave()
+    }, [performSave])
+
+  const updateProviderName = useCallback((providerId: string, name: string) => {
+        const trimmed = name.trim()
+        if (!trimmed) return
+        const next = latestProvidersRef.current.map((provider) => (
+            provider.id === providerId ? { ...provider, name: trimmed } : provider
+        ))
+        latestProvidersRef.current = next
+        setProviders(next)
+        void performSave()
+    }, [performSave])
+
+    /**
+     * Several relays can share the OpenAI-compatible adapter. Each instance gets
+     * a distinct `providerKey:instanceId` identity so credentials, models and
+     * pricing stay isolated from the preset provider.
+     */
+    const addProvider = useCallback((): string => {
+        const existing = latestProvidersRef.current
+        const template = existing.find((provider) => provider.id === OPENAI_COMPATIBLE_PROVIDER_KEY)
+        const instances = existing.filter((provider) => getProviderKey(provider.id) === OPENAI_COMPATIBLE_PROVIDER_KEY)
+        const baseName = template?.name || 'Custom API'
+        const usedNames = new Set(instances.map((provider) => provider.name))
+        let sequence = instances.length + 1
+        let name = `${baseName} ${sequence}`
+        while (usedNames.has(name)) {
+            sequence += 1
+            name = `${baseName} ${sequence}`
+        }
+
+        const providerId = `${OPENAI_COMPATIBLE_PROVIDER_KEY}:${createProviderInstanceId()}`
+        const next: Provider[] = [...existing, {
+            id: providerId,
+            name,
+            baseUrl: '',
+            proxyUrl: '',
+            editableBaseUrl: true,
+            featured: false,
+            connectionTest: true,
+            modelTypes: template?.modelTypes ?? ['llm', 'image'],
+            apiKey: '',
+            hasApiKey: false,
+        }]
+        latestProvidersRef.current = next
+        setProviders(next)
+        void performSave()
+        return providerId
     }, [performSave])
 
     // 提供商操作
@@ -379,6 +447,9 @@ export function useProviders(): UseProvidersReturn {
         flushConfig,
         updateProviderApiKey,
         updateProviderBaseUrl,
+        updateProviderProxyUrl,
+        updateProviderName,
+        addProvider,
         reorderProviders,
         deleteProvider,
         selectSlotModel,

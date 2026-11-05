@@ -113,6 +113,7 @@ export function useApiConfigSaver(input: {
           id: provider.id,
           name: provider.name,
           ...(provider.baseUrl ? { baseUrl: provider.baseUrl } : {}),
+          proxyUrl: provider.proxyUrl ?? '',
           ...(provider.apiKey !== undefined ? { apiKey: provider.apiKey } : {}),
         })),
         defaultModels: currentDefaultModels,
