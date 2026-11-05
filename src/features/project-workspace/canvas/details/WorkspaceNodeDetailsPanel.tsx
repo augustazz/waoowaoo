@@ -10,6 +10,7 @@ import {
   type WorkspaceResourceInputSummary,
   type WorkspaceResourceMediaType,
 } from '@/lib/workspace-resource/contracts'
+import { WORKSPACE_RESOURCE_SCHEMA } from '@/lib/workspace-resource/schema-registry'
 import {
   applyWorkspaceResourceRegenerationEdits,
   readWorkspaceResourceRegenerationTemplate,
@@ -420,6 +421,7 @@ export function WorkspaceNodeDetailsPanel({
   // Text/structured resources load their full content through the single
   // single-resource read route; tree summaries stay bounded (WR-13).
   const isTextResource = card.resource.mediaType === 'text' && card.resource.status === 'ready'
+  const isScreenplay = card.resource.schemaId === WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY
   const contentQuery = useWorkspaceResourceView({
     projectId,
     resourceId: isTextResource ? card.resource.resourceId : null,
@@ -453,7 +455,18 @@ export function WorkspaceNodeDetailsPanel({
   return (
     <section className="space-y-2.5 rounded-[20px] border border-slate-200 bg-white/96 p-4 shadow-[0_18px_48px_rgba(15,23,42,0.14)] backdrop-blur-xl">
       {isTextResource ? (
-        <SectionShell title={t('contentSection')}>
+        <SectionShell
+          title={t('contentSection')}
+          trailing={isScreenplay ? (
+            <button
+              type="button"
+              className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100"
+              onClick={() => actions.onOpenScreenplay(card.resource.resourceId)}
+            >
+              {t('openScriptWorkbench')}
+            </button>
+          ) : undefined}
+        >
           {fullContentText !== null ? (
             <pre
               {...workspaceCanvasScrollableRegionProps<HTMLPreElement>()}

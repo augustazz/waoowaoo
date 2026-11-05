@@ -134,6 +134,21 @@ export interface WorkspaceResourceVersionView {
   readonly createdAt: string
 }
 
+/** Lightweight version row for history lists; never includes full content. */
+export interface WorkspaceResourceVersionSummaryView {
+  readonly version: number
+  readonly contentKind: 'text' | 'structured' | 'media'
+  readonly contentPreview: string | null
+  readonly sha256: string | null
+  readonly sizeBytes: number
+  readonly sourceTurnId: string | null
+  readonly createdAt: string
+}
+
+export interface WorkspaceResourceVersionDetailView extends WorkspaceResourceVersionSummaryView {
+  readonly content: WorkspaceResourceContent | null
+}
+
 export type WorkspaceResourceSummaryView =
   | { readonly kind: 'folder' }
   | { readonly kind: 'empty' }

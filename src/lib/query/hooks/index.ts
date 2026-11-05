@@ -77,6 +77,15 @@ export {
 } from './useWorkspaceResourceByPath'
 
 export {
+    useProductionOverview,
+} from './useProductionOverview'
+
+export {
+    useWorkspaceResourceVersions,
+    useWorkspaceResourceVersion,
+} from './useWorkspaceResourceVersions'
+
+export {
     useAgentSessionView,
 } from './useAgentSessionView'
 

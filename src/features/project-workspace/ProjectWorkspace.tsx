@@ -64,6 +64,9 @@ function ProjectWorkspaceContent(props: ProjectWorkspaceProps) {
           activeAssistantFocusRequest={activeFocus}
           assistantTurnOutcomes={turnOutcomes}
           workspacePathFocusRequest={pathFocus}
+          onOpenWorkspacePath={(workspacePath) => {
+            setPathFocus({ requestId: crypto.randomUUID(), workspacePath })
+          }}
         />
       </div>
     </div>

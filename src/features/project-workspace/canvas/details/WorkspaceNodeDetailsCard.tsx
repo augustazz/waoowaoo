@@ -38,6 +38,7 @@ export interface WorkspaceNodeDetailsActions {
   readonly busy: boolean
   readonly onAssistantPrefill: (text: string | null) => void
   readonly onPreview: () => void
+  readonly onOpenScreenplay: (resourceId: string) => void
   readonly onOperation: (operation: WorkspaceCanvasResourceOperationView) => void
   /**
    * "Run again" with the edited input: the server-projected Operation plus

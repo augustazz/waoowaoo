@@ -83,6 +83,25 @@ describe('WorkspaceResource Operation registry conformance', () => {
     expect(deleteResource.inputSchema.safeParse({ path: '分集/第001集' }).success).toBe(false)
   })
 
+  it('revises an existing document in place without exposing path or placement', () => {
+    const registry = createProjectAgentOperationRegistryForApi()
+    const revise = registry.revise_project_document
+    if (!revise) throw new Error('revise_project_document missing')
+    expect(revise.channels).toEqual({ tool: true, api: true, mcp: true })
+    expect(revise.confirmation).toMatchObject({ kind: 'none', required: false })
+    expect(revise.resourceContract).toMatchObject({
+      kind: 'resource',
+      assistantPresentation: 'none',
+      placement: 'required',
+    })
+    const toolInput = JSON.stringify(revise.toolInputSchema)
+    expect(toolInput).toContain('resourceId')
+    expect(toolInput).toContain('expectedContentVersion')
+    expect(toolInput).not.toContain('workspacePath')
+    expect(toolInput).not.toContain('outputPath')
+    expect(toolInput).not.toContain('schemaId')
+  })
+
   it('accepts independent video items and caps their expanded Task count', () => {
     const item = (index: number, count = 1) => ({
       itemId: `shot-${String(index)}`,

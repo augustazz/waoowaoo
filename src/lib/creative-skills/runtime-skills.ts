@@ -202,7 +202,7 @@ export function creativeSkillRoutingInstructions(): readonly string[] {
   return CREATIVE_RUNTIME_SKILLS.map((skill) => {
     const mediaOperationId = readCreativeOutputDefinition(skill.outputKind).mediaOperationId
     const execution = mediaOperationId === null
-      ? 'text result, saved only through save_project_document on explicit request'
+      ? 'text result, saved through save_project_document or revised through revise_project_document on explicit request'
       : `pass exact items to ${mediaOperationId}`
     return `${skill.kind} -> native Skill ${skill.skillIds[1]}, outputKind=${skill.outputKind}, execution: ${execution}: ${skill.description}`
   })

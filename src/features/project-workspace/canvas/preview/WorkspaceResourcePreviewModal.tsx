@@ -6,6 +6,7 @@ import GlassModalShell from '@/components/ui/primitives/GlassModalShell'
 import { AppIcon } from '@/components/ui/icons'
 import { useWorkspaceResourceView } from '@/lib/query/hooks'
 import { workspaceResourceContentText } from '@/lib/workspace-resource/contracts'
+import { WORKSPACE_RESOURCE_SCHEMA } from '@/lib/workspace-resource/schema-registry'
 import { useWorkspaceProvider } from '../../WorkspaceProvider'
 import type { WorkspaceResourceCardMemberView } from '../contracts/workspace-canvas-interactions'
 
@@ -70,13 +71,16 @@ export function WorkspaceResourcePreviewModal({
   initialResourceId,
   onClose,
   onDiscuss,
+  onOpenScreenplay,
 }: {
   readonly members: readonly WorkspaceResourceCardMemberView[]
   readonly initialResourceId: string
   readonly onClose: () => void
   readonly onDiscuss: (card: WorkspaceResourceCardMemberView) => void
+  readonly onOpenScreenplay?: (resourceId: string) => void
 }) {
   const t = useTranslations('projectWorkflow.canvas.workspace.preview')
+  const stageT = useTranslations('projectWorkflow.canvas.workspace.stages')
   const initialIndex = Math.max(0, members.findIndex((card) => card.resource.resourceId === initialResourceId))
   const [index, setIndex] = useState(initialIndex)
   const card = members[index] ?? members[0] ?? null
@@ -103,15 +107,26 @@ export function WorkspaceResourcePreviewModal({
       <span className="text-xs tabular-nums text-[var(--glass-text-tertiary)]">
         {t('position', { current: index + 1, total: members.length })}
       </span>
-      <button
-        type="button"
-        className="glass-btn-base glass-btn-primary px-4 py-2 text-sm"
-        onClick={() => onDiscuss(card)}
-      >
-        {t('discuss')}
-      </button>
+      <div className="flex items-center gap-2">
+        {onOpenScreenplay && card.resource.status === 'ready' && card.resource.schemaId === WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY ? (
+          <button
+            type="button"
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            onClick={() => onOpenScreenplay(card.resource.resourceId)}
+          >
+            {stageT('openScript')}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="glass-btn-base glass-btn-primary px-4 py-2 text-sm"
+          onClick={() => onDiscuss(card)}
+        >
+          {t('discuss')}
+        </button>
+      </div>
     </div>
-  ) : null, [card, index, members.length, onDiscuss, t])
+  ) : null, [card, index, members.length, onDiscuss, onOpenScreenplay, stageT, t])
 
   if (!card) return null
   return (

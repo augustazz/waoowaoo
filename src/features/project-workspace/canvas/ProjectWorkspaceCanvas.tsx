@@ -82,6 +82,8 @@ import { useCanvasMultiSelection } from './hooks/useCanvasMultiSelection'
 import { isWorkspaceCanvasEditableTarget } from './canvas-interaction-target'
 import { CanvasOperationConfirmationModal } from './actions/CanvasOperationConfirmationModal'
 import { WorkspaceResourcePreviewModal } from './preview/WorkspaceResourcePreviewModal'
+import { ProductionStageRail } from './stages/ProductionStageRail'
+import { ScreenplayWorkbench } from './script/ScreenplayWorkbench'
 import { workspaceNodeId } from './workspace-canvas-node-ids'
 import { useCanvasUploadQueue, type CanvasUploadQueueItem } from './upload/useCanvasUploadQueue'
 import { CanvasUploadQueue } from './upload/CanvasUploadQueue'
@@ -122,6 +124,8 @@ interface ProjectWorkspaceCanvasContentProps {
   readonly activeAssistantFocusRequest?: WorkspaceAssistantActiveFocusRequest | null
   readonly assistantTurnOutcomes?: readonly WorkspaceAssistantTurnOutcomeView[]
   readonly workspacePathFocusRequest?: WorkspaceCanvasPathFocusRequest | null
+  /** Opens a project-relative Resource path in the Canvas (stage rail jump). */
+  readonly onOpenWorkspacePath?: (workspacePath: string) => void
 }
 
 const EMPTY_TURN_OUTCOMES: readonly WorkspaceAssistantTurnOutcomeView[] = []
@@ -201,6 +205,7 @@ function ProjectWorkspaceFolderCanvas({
   onAssistantDraftRequest,
   activeAssistantFocusRequest = null,
   assistantTurnOutcomes = EMPTY_TURN_OUTCOMES,
+  onOpenWorkspacePath,
 }: ProjectWorkspaceCanvasContentProps & {
   readonly folder: CurrentCanvasFolder
   readonly rootName: string
@@ -247,6 +252,7 @@ function ProjectWorkspaceFolderCanvas({
     readonly members: readonly WorkspaceResourceCardMemberView[]
     readonly initialResourceId: string
   } | null>(null)
+  const [screenplayResourceId, setScreenplayResourceId] = useState<string | null>(null)
   const [reactFlowReady, setReactFlowReady] = useState(false)
   const resolvedProjectedNodesRef = useRef<readonly WorkspaceCanvasFlowNode[]>([])
   const projectedFlowNodesRef = useRef<readonly WorkspaceCanvasFlowNode[]>([])
@@ -1115,6 +1121,7 @@ function ProjectWorkspaceFolderCanvas({
               actions={{
                 busy: operationAction.busy || deleteAction.busy,
                 onAssistantPrefill: requestAssistantDraft,
+                onOpenScreenplay: setScreenplayResourceId,
                 onPreview: () => {
                   const card = selectedNode.data.kind === 'resourceCard'
                     ? selectedNode.data.resourceDetails
@@ -1169,6 +1176,12 @@ function ProjectWorkspaceFolderCanvas({
             />
           </Panel>
         </ReactFlow>
+        <ProductionStageRail
+          projectId={projectId}
+          onOpenResourcePath={(workspacePath) => onOpenWorkspacePath?.(workspacePath)}
+          onOpenScreenplay={setScreenplayResourceId}
+          onAssistantDraft={(text) => requestAssistantDraft(text)}
+        />
         {multiSelection.marquee ? (
           <div
             aria-hidden="true"
@@ -1208,11 +1221,26 @@ function ProjectWorkspaceFolderCanvas({
           members={preview.members}
           initialResourceId={preview.initialResourceId}
           onClose={() => setPreview(null)}
+          onOpenScreenplay={(resourceId) => {
+            setPreview(null)
+            setScreenplayResourceId(resourceId)
+          }}
           onDiscuss={(card) => {
             const nextSelection = selectionForCard(card)
             if (nextSelection) onSelectionChange(nextSelection)
             setPreview(null)
             requestAssistantDraft(null)
+          }}
+        />
+      ) : null}
+      {screenplayResourceId ? (
+        <ScreenplayWorkbench
+          key={screenplayResourceId}
+          resourceId={screenplayResourceId}
+          onClose={() => setScreenplayResourceId(null)}
+          onAssistantDraft={(text) => {
+            setScreenplayResourceId(null)
+            requestAssistantDraft(text)
           }}
         />
       ) : null}

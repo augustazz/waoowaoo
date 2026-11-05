@@ -50,9 +50,11 @@ import {
 import { buildWorkspaceResourceId } from '@/lib/workspace-resource/identity'
 import {
   assertUniqueWorkspaceResourcePaths,
+  contentKindFromPath,
   workspaceResourceDisplayName,
 } from '@/lib/workspace-resource/path'
 import {
+  appendWorkspaceResourceUserContentInTransaction,
   bindWorkspaceResourceTasksInTransaction,
   createWorkspaceResourceFolderInTransaction,
   materializeWorkspaceResourceInTransaction,
@@ -173,6 +175,34 @@ const textOutputSchema = z.object({
   resourceId: z.string().min(1),
   contentVersion: z.number().int().positive(),
   workspacePath: z.string().min(1),
+}).strict()
+
+const PROJECT_DOCUMENT_SCHEMA_IDS = [
+  WORKSPACE_RESOURCE_SCHEMA.GENERIC_TEXT,
+  WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY,
+  WORKSPACE_RESOURCE_SCHEMA.CREATIVE_DIRECTION,
+  WORKSPACE_RESOURCE_SCHEMA.ASSET_GENERATION_BATCH,
+  WORKSPACE_RESOURCE_SCHEMA.VIDEO_GENERATION_BATCH,
+  WORKSPACE_RESOURCE_SCHEMA.AUDIO_GENERATION_BATCH,
+] as const
+
+const reviseProjectDocumentInputSchema = z.object({
+  resourceId: z.string().trim().min(1).max(32)
+    .describe('Exact Resource identity returned by get_resource or save_project_document.'),
+  expectedContentVersion: z.number().int().positive()
+    .describe('The contentVersion the revision is based on. A mismatch fails instead of overwriting newer edits.'),
+  content: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('text'), text: z.string().max(4 * 1024 * 1024) }).strict(),
+    z.object({ kind: z.literal('structured'), data: workspaceResourceJsonValueSchema }).strict(),
+  ]).describe('The complete new document content. For structured documents, copy the existing object and change only the intended fields.'),
+}).strict()
+
+const reviseProjectDocumentOutputSchema = z.object({
+  success: z.literal(true),
+  resourceId: z.string().min(1),
+  workspacePath: z.string().min(1),
+  previousContentVersion: z.number().int().positive(),
+  contentVersion: z.number().int().positive(),
 }).strict()
 
 const mediaOutputSchema = z.object({
@@ -1649,6 +1679,115 @@ export function createWorkspaceResourceGenerationOperations(): ProjectAgentOpera
           },
         })
         return textOutputSchema.parse({ success: true, ...reserved, ...materialized })
+      },
+    }),
+    revise_project_document: defineOperation({
+      id: 'revise_project_document',
+      summary: 'Revise an existing text or structured project document in place by appending a new immutable version. Read the current Resource first, copy the complete content, change only the intended fields, and pass the current contentVersion. Never use this to create a new document or to edit a different Resource.',
+      intent: 'act',
+      channels: { tool: true, api: true, mcp: true },
+      toolContractRevision: 'revise_project_document/v1',
+      effects: {
+        writes: true,
+        workspaceResourceImpact: 'workspace_resources',
+        billable: false,
+        destructive: false,
+        overwrite: false,
+        bulk: false,
+        externalSideEffects: false,
+        longRunning: false,
+      },
+      resourceContract: {
+        kind: 'resource',
+        assistantPresentation: 'none',
+        acceptsReferences: false,
+        outputResourceKinds: ['file'],
+        outputMediaTypes: ['text'],
+        outputSchemaIds: PROJECT_DOCUMENT_SCHEMA_IDS,
+        placement: 'required',
+      },
+      confirmation: { kind: 'none', required: false },
+      inputSchema: reviseProjectDocumentInputSchema,
+      outputSchema: reviseProjectDocumentOutputSchema,
+      executeInTransaction: async (ctx, input, tx) => {
+        const resource = await tx.workspaceResource.findFirst({
+          where: {
+            id: input.resourceId,
+            projectId: ctx.projectId,
+            userId: ctx.userId,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            resourceKind: true,
+            mediaType: true,
+            schemaId: true,
+            workspacePath: true,
+            currentVersion: true,
+          },
+        })
+        if (!resource || resource.resourceKind !== 'file' || resource.mediaType !== 'text') {
+          throw new ApiError('INVALID_PARAMS', { code: 'PROJECT_DOCUMENT_NOT_EDITABLE' })
+        }
+        if (!PROJECT_DOCUMENT_SCHEMA_IDS.some((schemaId) => schemaId === resource.schemaId)) {
+          throw new ApiError('INVALID_PARAMS', { code: 'PROJECT_DOCUMENT_SCHEMA_NOT_EDITABLE' })
+        }
+        if (contentKindFromPath(resource.workspacePath) !== input.content.kind) {
+          throw new ApiError('INVALID_PARAMS', { code: 'PROJECT_DOCUMENT_CONTENT_KIND_MISMATCH' })
+        }
+        if (resource.currentVersion !== input.expectedContentVersion) {
+          throw new ApiError('CONFLICT', {
+            code: 'PROJECT_DOCUMENT_VERSION_CONFLICT',
+            expectedContentVersion: input.expectedContentVersion,
+            currentContentVersion: resource.currentVersion,
+          })
+        }
+        if (input.content.kind === 'structured') {
+          const outputKind = readCreativeOutputKind(input.content.data)
+          if (outputKind) {
+            const parsed = safeParseCreativeOutput(input.content.data)
+            if (!parsed.success) {
+              throw new ApiError('INVALID_PARAMS', {
+                code: 'PROJECT_DOCUMENT_SCHEMA_INVALID',
+                field: 'content.data',
+                issues: parsed.error.issues.slice(0, 20).map((issue) => ({
+                  path: issue.path.join('.'),
+                  message: issue.message,
+                })),
+              })
+            }
+            if (readCreativeOutputDefinition(outputKind).savedDocumentSchemaId !== resource.schemaId) {
+              throw new ApiError('INVALID_PARAMS', { code: 'PROJECT_DOCUMENT_SCHEMA_MISMATCH' })
+            }
+          } else if (resource.schemaId !== WORKSPACE_RESOURCE_SCHEMA.GENERIC_TEXT) {
+            throw new ApiError('INVALID_PARAMS', { code: 'PROJECT_DOCUMENT_OUTPUT_KIND_INVALID' })
+          }
+        } else if (resource.schemaId !== WORKSPACE_RESOURCE_SCHEMA.GENERIC_TEXT) {
+          throw new ApiError('INVALID_PARAMS', { code: 'PROJECT_DOCUMENT_CONTENT_KIND_MISMATCH' })
+        }
+        const revised = await appendWorkspaceResourceUserContentInTransaction(tx, {
+          userId: ctx.userId,
+          projectId: ctx.projectId,
+          resourceId: resource.id,
+          expectedContentVersion: input.expectedContentVersion,
+          content: input.content,
+          sourceTurnId: ctx.context.turnId?.trim() || null,
+        }).catch((error: unknown) => {
+          if (
+            error instanceof Error
+            && error.message.startsWith('WORKSPACE_RESOURCE_CONTENT_VERSION_CONFLICT:')
+          ) {
+            throw new ApiError('CONFLICT', { code: 'PROJECT_DOCUMENT_VERSION_CONFLICT' })
+          }
+          throw error
+        })
+        return reviseProjectDocumentOutputSchema.parse({
+          success: true,
+          resourceId: revised.resourceId,
+          workspacePath: resource.workspacePath,
+          previousContentVersion: resource.currentVersion,
+          contentVersion: revised.contentVersion,
+        })
       },
     }),
     create_image: defineOperation({

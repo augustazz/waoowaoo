@@ -124,6 +124,7 @@ function alternativeMember(
       name: memberName(member),
       status: member.status,
       mediaType,
+      schemaId: member.schemaId,
       error: null,
     },
     inputSummaries: [],
