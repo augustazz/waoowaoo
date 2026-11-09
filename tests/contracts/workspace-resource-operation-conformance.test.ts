@@ -6,7 +6,11 @@ import {
   assetGenerationBatchOutputSchema,
   videoGenerationBatchSchema,
 } from '@/lib/workspace-resource/generation-request'
-import { requireWorkspaceResourceSchema } from '@/lib/workspace-resource/schema-registry'
+import {
+  requireWorkspaceResourceSchema,
+  WORKSPACE_RESOURCE_SCHEMA,
+} from '@/lib/workspace-resource/schema-registry'
+import { defaultProductionFolderPathForSchemaId } from '@/lib/workspace-resource/production-stages'
 
 describe('WorkspaceResource Operation registry conformance', () => {
   it('aligns every declared producer with the canonical Resource schema registry', () => {
@@ -26,6 +30,17 @@ describe('WorkspaceResource Operation registry conformance', () => {
         }
       }
     }
+  })
+
+  it('produces the final-cut schema and defaults it to the final step folder', () => {
+    const merge = createProjectAgentOperationRegistryForApi().merge_videos
+    if (!merge) throw new Error('merge_videos missing')
+    if (merge.resourceContract.kind !== 'resource') throw new Error('merge_videos has no resource contract')
+    expect(merge.resourceContract.outputSchemaIds).toEqual([
+      WORKSPACE_RESOURCE_SCHEMA.COMPOSITE_VIDEO,
+    ])
+    expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.COMPOSITE_VIDEO))
+      .toBe('成片')
   })
 
   it('publishes every media generator directly to MCP and exposes no manifest operation', () => {

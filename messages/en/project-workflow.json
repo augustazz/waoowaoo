@@ -294,6 +294,25 @@
       },
       "stages": {
         "label": "Production stages",
+        "phases": {
+          "pre": "Pre-production",
+          "production": "Production",
+          "post": "Post-production"
+        },
+        "stepStatus": {
+          "blocked": "Missing prerequisites",
+          "empty": "Not started",
+          "in_progress": "In progress",
+          "failed": "Has failures",
+          "needs_review": "Needs review",
+          "ready": "Ready"
+        },
+        "requiredBadge": "Required",
+        "optionalBadge": "Optional",
+        "blockedBy": "Complete first: {steps}",
+        "recommendedMissing": "Recommended next: {steps}",
+        "review": "Ask the assistant to review this step",
+        "listSeparator": ", ",
         "script": "Script",
         "direction": "Creative direction",
         "assets": "Characters / locations / props",
@@ -313,6 +332,28 @@
         "openScript": "Open script workbench",
         "locate": "Locate on canvas",
         "more": "{count} more items on the canvas",
+        "content": {
+          "viewStep": "Current step",
+          "viewFiles": "All files",
+          "viewStepHint": "Show only this step's artifacts",
+          "viewFilesHint": "Browse the project's full folder tree",
+          "folder": "Folder: {path}",
+          "episode": "Episode {number}",
+          "unassigned": "Unassigned",
+          "groupEmpty": "No artifacts in this group yet",
+          "empty": "This step has no artifacts yet",
+          "emptyHint": "Ask the assistant to start this step, or add files in All files.",
+          "loading": "Loading…",
+          "loadFailed": "Failed to load step artifacts",
+          "retry": "Retry",
+          "refresh": "Refresh",
+          "assetType": {
+            "character": "Characters",
+            "location": "Locations",
+            "prop": "Props",
+            "other": "Other"
+          }
+        },
         "prompts": {
           "script": "I want to start writing this project's screenplay. Ask me the necessary questions first, then give me 3 possible directions. Do not generate the full screenplay yet.",
           "direction": "Based on the current screenplay, establish the creative direction: visual style, color, camera language, and sound tone. Give me the proposal first; do not generate assets yet.",
@@ -321,6 +362,15 @@
           "video": "Based on the current storyboard and assets, explain the order for generating video segments and the references each segment needs. Give me the plan first; do not submit video generation yet.",
           "audio": "Based on the current screenplay and storyboard, plan the score, sound effects, and voice-over. Give me the plan and asset list first.",
           "final": "Review the completed video segments and give me a final-cut assembly plan plus any shots that need to be redone."
+        },
+        "reviewPrompts": {
+          "script": "Review the current screenplay: is the structure complete, are character motivations clear, and what needs my confirmation? Do not rewrite it yet.",
+          "direction": "Review whether the current creative direction matches the screenplay and list the trade-offs I need to confirm.",
+          "assets": "Review the asset list: does it cover every character, location, and prop, and which images are still missing? Do not regenerate anything yet.",
+          "storyboard": "Review the storyboard: are the shots coherent, are duration and transitions reasonable, and which shots still need keyframes?",
+          "video": "Review the generated video segments: which are usable, which need a retry, and are any shots missing?",
+          "audio": "Review the audio plan: are score, sound effects, and voice-over complete, and what still needs to be generated?",
+          "final": "Review the final cut: are segment order, duration, picture, and sound consistent, and what shots or audio are still missing?"
         }
       },
       "folderNavigation": {

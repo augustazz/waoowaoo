@@ -294,6 +294,25 @@
       },
       "stages": {
         "label": "生产阶段",
+        "phases": {
+          "pre": "前期",
+          "production": "制作",
+          "post": "后期"
+        },
+        "stepStatus": {
+          "blocked": "缺少前置",
+          "empty": "未开始",
+          "in_progress": "进行中",
+          "failed": "有失败",
+          "needs_review": "待检查",
+          "ready": "已完成"
+        },
+        "requiredBadge": "必做",
+        "optionalBadge": "可选",
+        "blockedBy": "需要先完成：{steps}",
+        "recommendedMissing": "建议先完成：{steps}",
+        "review": "让助手检查这一步",
+        "listSeparator": "、",
         "script": "剧本",
         "direction": "创作方向",
         "assets": "角色 / 场景 / 道具",
@@ -313,6 +332,28 @@
         "openScript": "打开剧本工作台",
         "locate": "定位到画布",
         "more": "还有 {count} 项，去画布查看",
+        "content": {
+          "viewStep": "当前步骤",
+          "viewFiles": "全部文件",
+          "viewStepHint": "只看这一步的产物",
+          "viewFilesHint": "查看项目的全部目录和文件",
+          "folder": "目录：{path}",
+          "episode": "第 {number} 集",
+          "unassigned": "未分集",
+          "groupEmpty": "这一组还没有产物",
+          "empty": "这一步还没有产物",
+          "emptyHint": "让助手开始这一步，或在全部文件中直接添加。",
+          "loading": "加载中…",
+          "loadFailed": "步骤产物加载失败",
+          "retry": "重试",
+          "refresh": "刷新",
+          "assetType": {
+            "character": "角色",
+            "location": "场景",
+            "prop": "道具",
+            "other": "其他"
+          }
+        },
         "prompts": {
           "script": "我要开始写这个项目的剧本。请先问我必要的问题，再给我 3 个可选方向，不要直接生成完整剧本。",
           "direction": "请基于当前剧本建立创作方向：视觉风格、色彩、镜头语言和声音基调。先给方案，不要直接生成资产。",
@@ -321,6 +362,15 @@
           "video": "请基于当前分镜和资产，说明视频片段的生成顺序和每段需要的参考。先给计划，不要直接提交视频生成。",
           "audio": "请基于当前剧本和分镜，规划配乐、音效和配音。先给方案和素材清单。",
           "final": "请检查已完成的视频片段，给出成片合成计划和需要补拍的镜头。"
+        },
+        "reviewPrompts": {
+          "script": "请检查当前剧本：结构是否完整、人物动机是否清楚、有哪些地方需要我确认？先不要直接改写。",
+          "direction": "请检查当前创作方向是否和剧本一致，并列出需要我确认的取舍。",
+          "assets": "请检查资产清单：是否覆盖所有出场角色、场景和道具，哪些还需要补图？先不要重新生成。",
+          "storyboard": "请检查分镜清单：镜头是否连贯、时长和转场是否合理，哪些镜头需要补关键帧？",
+          "video": "请检查已生成的视频片段：哪些可用、哪些需要重试，是否还有缺失镜头？",
+          "audio": "请检查音频方案：配乐、音效和配音是否齐全，哪些需要补生成？",
+          "final": "请检查成片：片段顺序、时长和音画是否一致，还缺哪些镜头或音频？"
         }
       },
       "folderNavigation": {

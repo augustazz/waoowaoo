@@ -6,7 +6,7 @@ import { queryKeys } from '@/lib/query/keys'
 import type { ProductionOverviewView } from '@/lib/workspace-resource/production-stages'
 
 /**
- * Derived production Stage counts. Kept under the workspaceResources key
+ * Derived production step status. Kept under the workspaceResources key
  * prefix so the existing refresh/invalidation path also refreshes the rail.
  */
 export function useProductionOverview(projectId: string) {

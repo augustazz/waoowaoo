@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { WORKSPACE_RESOURCE_SCHEMA } from '@/lib/workspace-resource/schema-registry'
 import {
+  defaultProductionFolderPathForSchemaId,
+  PRODUCTION_STAGE_DEFINITIONS,
   PRODUCTION_STAGE_KEYS,
+  productionStageDefinition,
+  productionStageForResource,
+  productionStageForWorkspacePath,
+  resolveProductionFolderPath,
   summarizeProductionStages,
   type ProductionStageResourceRow,
 } from '@/lib/workspace-resource/production-stages'
@@ -10,11 +16,12 @@ function row(
   id: string,
   schemaId: string,
   status: ProductionStageResourceRow['status'],
+  workspacePath = `${id}.json`,
 ): ProductionStageResourceRow {
   return {
     id,
     name: id,
-    workspacePath: `${id}.json`,
+    workspacePath,
     status,
     schemaId,
     mediaType: 'text',
@@ -74,5 +81,244 @@ describe('summarizeProductionStages', () => {
     ])
     expect(stages.find((stage) => stage.key === 'assets')?.counts.total).toBe(1)
     expect(stages.find((stage) => stage.key === 'final')?.status).toBe('ready')
+  })
+})
+
+describe('production step registry', () => {
+  it('keeps the canonical keys in order and groups them by phase', () => {
+    expect(PRODUCTION_STAGE_DEFINITIONS.map((definition) => definition.key))
+      .toEqual([...PRODUCTION_STAGE_KEYS])
+    expect(PRODUCTION_STAGE_DEFINITIONS.map((definition) => definition.order))
+      .toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(PRODUCTION_STAGE_DEFINITIONS
+      .filter((definition) => definition.phase === 'pre')
+      .map((definition) => definition.key)).toEqual(['script', 'direction'])
+    expect(PRODUCTION_STAGE_DEFINITIONS
+      .filter((definition) => definition.phase === 'production')
+      .map((definition) => definition.key)).toEqual(['assets', 'storyboard', 'video'])
+    expect(PRODUCTION_STAGE_DEFINITIONS
+      .filter((definition) => definition.phase === 'post')
+      .map((definition) => definition.key)).toEqual(['audio', 'final'])
+  })
+
+  it('marks only the agreed steps as optional', () => {
+    const optional = PRODUCTION_STAGE_DEFINITIONS
+      .filter((definition) => !definition.required)
+      .map((definition) => definition.key)
+    expect(optional).toEqual(['direction', 'storyboard', 'audio'])
+  })
+
+  it('never lets optional steps become hard prerequisites', () => {
+    const dependsOn = new Map(
+      PRODUCTION_STAGE_DEFINITIONS.map((definition) => [definition.key, definition.dependsOn]),
+    )
+    expect(dependsOn.get('video')).toEqual(['script', 'assets'])
+    expect(dependsOn.get('final')).toEqual(['video'])
+    expect(productionStageDefinition('video').recommendedDependsOn).toEqual(['storyboard'])
+    expect(productionStageDefinition('assets').recommendedDependsOn).toEqual(['direction'])
+  })
+
+  it('exposes primary artifacts and assistant prompt keys per step', () => {
+    const assets = productionStageDefinition('assets')
+    expect(assets.primarySchemaIds).toEqual([WORKSPACE_RESOURCE_SCHEMA.ASSET_GENERATION_BATCH])
+    expect(assets.optionalSchemaIds).toEqual([
+      WORKSPACE_RESOURCE_SCHEMA.CHARACTER_IMAGE,
+      WORKSPACE_RESOURCE_SCHEMA.LOCATION_IMAGE,
+      WORKSPACE_RESOURCE_SCHEMA.PROP_IMAGE,
+    ])
+    expect(assets.assistant.startPromptKey)
+      .toBe('projectWorkflow.canvas.workspace.stages.prompts.assets')
+    expect(assets.assistant.reviewPromptKey)
+      .toBe('projectWorkflow.canvas.workspace.stages.reviewPrompts.assets')
+  })
+
+  it('owns one canonical folder and grouping policy per step', () => {
+    const folders = PRODUCTION_STAGE_DEFINITIONS.map((definition) => [
+      definition.key,
+      definition.defaultFolderPath,
+      definition.contentGrouping,
+    ])
+    expect(folders).toEqual([
+      ['script', '剧本', 'episode'],
+      ['direction', '创作方向', 'episode'],
+      ['assets', '资产', 'asset_type'],
+      ['storyboard', '分镜', 'episode'],
+      ['video', '视频', 'episode'],
+      ['audio', '音频', 'episode'],
+      ['final', '成片', 'episode'],
+    ])
+  })
+
+  it('resolves placement folders, including asset type subfolders', () => {
+    expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY))
+      .toBe('剧本')
+    expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.CHARACTER_IMAGE))
+      .toBe('资产/角色')
+    expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.LOCATION_IMAGE))
+      .toBe('资产/场景')
+    expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.PROP_IMAGE))
+      .toBe('资产/道具')
+    expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.GENERIC_IMAGE))
+      .toBeNull()
+  })
+
+  it('treats an omitted folder as the step default but preserves null as the root', () => {
+    expect(resolveProductionFolderPath(undefined, WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY))
+      .toBe('剧本')
+    expect(resolveProductionFolderPath(null, WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY))
+      .toBeNull()
+    expect(resolveProductionFolderPath('自定义目录', WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY))
+      .toBe('自定义目录')
+    expect(resolveProductionFolderPath(undefined, WORKSPACE_RESOURCE_SCHEMA.GENERIC_IMAGE))
+      .toBeNull()
+  })
+})
+
+describe('productionStepForResource ownership', () => {
+  it('prefers the step folder over a conflicting schema', () => {
+    expect(productionStageForResource({
+      workspacePath: '剧本/第01集.json',
+      schemaId: WORKSPACE_RESOURCE_SCHEMA.CREATIVE_DIRECTION,
+    })).toBe('script')
+    expect(productionStageForResource({
+      workspacePath: '成片/正片.mp4',
+      schemaId: WORKSPACE_RESOURCE_SCHEMA.GENERIC_VIDEO,
+    })).toBe('final')
+  })
+
+  it('falls back to the schema for legacy files outside the convention folders', () => {
+    expect(productionStageForResource({
+      workspacePath: 'legacy/screenplay.json',
+      schemaId: WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY,
+    })).toBe('script')
+    expect(productionStageForResource({
+      workspacePath: '随机/文件.txt',
+      schemaId: WORKSPACE_RESOURCE_SCHEMA.GENERIC_TEXT,
+    })).toBeNull()
+  })
+
+  it('does not treat a bare step folder name as ownership', () => {
+    expect(productionStageForWorkspacePath('剧本')).toBeNull()
+    expect(productionStageForWorkspacePath('剧本/第01集.json')).toBe('script')
+    expect(productionStageForWorkspacePath('资产/角色/主角.png')).toBe('assets')
+  })
+})
+
+describe('summarizeProductionStages step status', () => {
+  it('derives readiness from Resources instead of step order', () => {
+    const stages = summarizeProductionStages([
+      row('screenplay', WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY, 'ready'),
+    ])
+    const script = stages.find((stage) => stage.key === 'script')
+    const direction = stages.find((stage) => stage.key === 'direction')
+    const assets = stages.find((stage) => stage.key === 'assets')
+    const storyboard = stages.find((stage) => stage.key === 'storyboard')
+
+    expect(script?.stepStatus).toBe('ready')
+    expect(script?.requiredArtifactsReady).toBe(true)
+    expect(direction?.stepStatus).toBe('empty')
+    expect(assets?.stepStatus).toBe('empty')
+    expect(assets?.blockers).toEqual([])
+    expect(assets?.recommendedMissingStepKeys).toEqual(['direction'])
+    // assets is required and still missing, so storyboard cannot start yet.
+    expect(storyboard?.stepStatus).toBe('blocked')
+    expect(storyboard?.blockers).toEqual(['assets'])
+  })
+
+  it('keeps optional storyboard from blocking video', () => {
+    const stages = summarizeProductionStages([
+      row('screenplay', WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY, 'ready'),
+      row('manifest', WORKSPACE_RESOURCE_SCHEMA.ASSET_GENERATION_BATCH, 'ready'),
+    ])
+    const storyboard = stages.find((stage) => stage.key === 'storyboard')
+    const video = stages.find((stage) => stage.key === 'video')
+    const final = stages.find((stage) => stage.key === 'final')
+
+    expect(storyboard?.stepStatus).toBe('empty')
+    expect(storyboard?.blockers).toEqual([])
+    expect(video?.stepStatus).toBe('empty')
+    expect(video?.blockers).toEqual([])
+    expect(video?.recommendedMissingStepKeys).toEqual(['storyboard'])
+    expect(final?.stepStatus).toBe('blocked')
+    expect(final?.blockers).toEqual(['video'])
+  })
+
+  it('reports optional assets as in progress without satisfying the step', () => {
+    const stages = summarizeProductionStages([
+      row('screenplay', WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY, 'ready'),
+      row('character', WORKSPACE_RESOURCE_SCHEMA.CHARACTER_IMAGE, 'ready'),
+    ])
+    const assets = stages.find((stage) => stage.key === 'assets')
+    expect(assets).toMatchObject({
+      stepStatus: 'in_progress',
+      requiredArtifactsReady: false,
+      counts: { total: 1, ready: 1, pending: 0, failed: 0, canceled: 0 },
+    })
+    expect(assets?.missingRequiredSchemaIds).toEqual([
+      WORKSPACE_RESOURCE_SCHEMA.ASSET_GENERATION_BATCH,
+    ])
+  })
+
+  it('surfaces partial failures as needs-review without hiding usable output', () => {
+    const stages = summarizeProductionStages([
+      row('segment-ready', WORKSPACE_RESOURCE_SCHEMA.VIDEO_SEGMENT, 'ready'),
+      row('segment-failed', WORKSPACE_RESOURCE_SCHEMA.VIDEO_SEGMENT, 'failed'),
+    ])
+    const video = stages.find((stage) => stage.key === 'video')
+    expect(video).toMatchObject({
+      status: 'failed',
+      stepStatus: 'needs_review',
+      requiredArtifactsReady: true,
+      counts: { total: 2, ready: 1, pending: 0, failed: 1, canceled: 0 },
+    })
+  })
+
+  it('accepts either composite or rendered output as the final artifact', () => {
+    const stages = summarizeProductionStages([
+      row('segment', WORKSPACE_RESOURCE_SCHEMA.VIDEO_SEGMENT, 'ready'),
+      row('render', WORKSPACE_RESOURCE_SCHEMA.RENDERED_VIDEO, 'ready'),
+    ])
+    const final = stages.find((stage) => stage.key === 'final')
+    expect(final).toMatchObject({
+      stepStatus: 'ready',
+      requiredArtifactsReady: true,
+      missingRequiredSchemaIds: [],
+    })
+  })
+
+  it('treats a ready file in the step folder as the step artifact', () => {
+    const stages = summarizeProductionStages([
+      row(
+        'plain-script',
+        WORKSPACE_RESOURCE_SCHEMA.GENERIC_TEXT,
+        'ready',
+        '剧本/第01集.txt',
+      ),
+      row('upload', WORKSPACE_RESOURCE_SCHEMA.UPLOAD_VIDEO, 'ready', '成片/正片.mp4'),
+    ])
+    const script = stages.find((stage) => stage.key === 'script')
+    const final = stages.find((stage) => stage.key === 'final')
+    expect(script).toMatchObject({
+      stepStatus: 'ready',
+      requiredArtifactsReady: true,
+      missingRequiredSchemaIds: [],
+      counts: { total: 1, ready: 1, pending: 0, failed: 0, canceled: 0 },
+    })
+    expect(final).toMatchObject({
+      stepStatus: 'ready',
+      requiredArtifactsReady: true,
+    })
+  })
+
+  it('does not report a canceled-only step as in progress', () => {
+    const stages = summarizeProductionStages([
+      row('canceled', WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY, 'canceled'),
+    ])
+    const script = stages.find((stage) => stage.key === 'script')
+    expect(script).toMatchObject({
+      stepStatus: 'empty',
+      requiredArtifactsReady: false,
+      counts: { total: 1, ready: 0, pending: 0, failed: 0, canceled: 1 },
+    })
   })
 })

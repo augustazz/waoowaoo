@@ -5,8 +5,8 @@ import { readProductionOverview } from '@/lib/workspace-resource/production-over
 
 /**
  * GET /api/projects/[projectId]/production-overview
- * Grouped Stage counts for the Canvas stage rail. A read-only projection; it
- * never implies a required order or advances the project's stage.
+ * Derived step status for the Canvas step rail. A read-only projection: step
+ * status never persists and never implies a required order.
  */
 export const GET = apiHandler(async (
   _request: NextRequest,

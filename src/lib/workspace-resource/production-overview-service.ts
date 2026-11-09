@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { WorkspaceResourceMediaType, WorkspaceResourceStatus } from './contracts'
 import { readWorkspaceResourceRevision } from './projection-revision'
 import {
+  PRODUCTION_STAGE_FOLDER_PATHS,
   PRODUCTION_STAGE_SCHEMA_IDS,
   summarizeProductionStages,
   type ProductionOverviewView,
@@ -28,7 +29,15 @@ export async function readProductionOverview(input: {
         deletedAt: null,
         activePath: { not: null },
         resourceKind: 'file',
-        schemaId: { in: [...PRODUCTION_STAGE_SCHEMA_IDS] },
+        // Folder-first ownership with schema fallback, matching the step view.
+        // Uploads and generic media have no step schema, so a schema-only query
+        // would report them missing from the step that visually owns them.
+        OR: [
+          { schemaId: { in: [...PRODUCTION_STAGE_SCHEMA_IDS] } },
+          ...PRODUCTION_STAGE_FOLDER_PATHS.map((folderPath) => ({
+            workspacePath: { startsWith: `${folderPath}/` },
+          })),
+        ],
       },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       select: {

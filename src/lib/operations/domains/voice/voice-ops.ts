@@ -14,6 +14,7 @@ import {
   retryWorkspaceResourcesInTransaction,
 } from '@/lib/workspace-resource/persistence'
 import { WORKSPACE_RESOURCE_SCHEMA } from '@/lib/workspace-resource/schema-registry'
+import { resolveProductionFolderPath } from '@/lib/workspace-resource/production-stages'
 import { buildWorkspaceResourceLifecycleProjection } from '@/lib/workspace-resource/task-runtime-envelope'
 import { requireProductionModel } from '@/lib/model-access/production-model'
 import { defineOperation } from '@/lib/operations/define-operation'
@@ -158,12 +159,16 @@ async function planNewVoice(
     ctx.toolCallId?.trim() || ctx.requestId?.trim() || fingerprint,
     fingerprint,
   ].join(':')
+  const folderPath = resolveProductionFolderPath(
+    request.folderPath,
+    WORKSPACE_RESOURCE_SCHEMA.VOICE_REFERENCE,
+  )
   const resources = await Promise.all(Array.from({ length: request.count }, async (_, memberIndex) => {
     const resourceId = buildWorkspaceResourceId({ operationId: 'generate_voice', requestId, memberIndex })
     const workspacePath = await resolveGeneratedWorkspaceResourcePlacement(prisma, {
       userId: ctx.userId,
       projectId: ctx.projectId,
-      folderPath: request.folderPath,
+      folderPath,
       name: request.name,
       resourceId,
       mediaType: 'audio',
@@ -173,7 +178,7 @@ async function planNewVoice(
     return {
       resourceId,
       workspacePath,
-      folderPath: request.folderPath ?? null,
+      folderPath,
       memberIndex,
       taskPlanId: `generate_voice:${resourceId}`,
     }

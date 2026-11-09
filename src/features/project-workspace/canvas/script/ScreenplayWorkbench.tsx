@@ -674,26 +674,9 @@ export function ScreenplayWorkbench({
       ) : (
         <div className="grid h-[68vh] min-h-[20rem] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1">
           <aside className="flex max-h-[30vh] min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200/70 md:max-h-none">
-            <div className="flex rounded-full bg-slate-200/70 p-0.5">
-              <button
-                type="button"
-                className={`flex-1 rounded-full px-2 py-1 text-[11px] font-semibold transition ${
-                  panel === 'scenes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-                onClick={() => { setPanel('scenes'); setSelectedVersion(null); setShowDiff(false) }}
-              >
-                {t('sceneList')}
-              </button>
-              <button
-                type="button"
-                className={`flex-1 rounded-full px-2 py-1 text-[11px] font-semibold transition ${
-                  panel === 'versions' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-                onClick={() => { setPanel('versions'); setShowDiff(false) }}
-              >
-                {t('history')}
-              </button>
-            </div>
+            <p className="px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              {t('sceneList')}
+            </p>
             <div className="min-h-0 flex-1 overflow-y-auto">
               {panel === 'scenes' ? (
                 <ol className="space-y-1">

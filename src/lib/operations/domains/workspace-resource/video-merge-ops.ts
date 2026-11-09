@@ -10,6 +10,7 @@ import {
   validateWorkspaceResourceInputReferencesInTransaction,
 } from '@/lib/workspace-resource/persistence'
 import { WORKSPACE_RESOURCE_SCHEMA } from '@/lib/workspace-resource/schema-registry'
+import { resolveProductionFolderPath } from '@/lib/workspace-resource/production-stages'
 import { buildWorkspaceResourceLifecycleProjection } from '@/lib/workspace-resource/task-runtime-envelope'
 import { workspaceResourceDisplayName } from '@/lib/workspace-resource/path'
 import { defineOperation } from '@/lib/operations/define-operation'
@@ -26,7 +27,7 @@ import { musicScoreGenerationOptionsSchema } from '@/lib/music/score-specificati
 
 const mergeVideosInputSchema = z.object({
   folderPath: z.string().trim().min(1).max(512).nullable().optional()
-    .describe('Optional project-relative destination folder. Missing folders are created atomically with the merged video Resource.'),
+    .describe('Optional project-relative destination folder. Omit for the final-cut folder (`成片`); use null for the project root. Missing folders are created atomically with the merged video Resource.'),
   name: z.string().trim().min(1).max(300),
   output: videoMergeOutputSchema,
   videos: z.array(z.object({
@@ -189,13 +190,15 @@ export function createWorkspaceResourceVideoMergeOperations(): ProjectAgentOpera
         acceptsReferences: true,
         outputResourceKinds: ['file'],
         outputMediaTypes: ['video'],
-        outputSchemaIds: [WORKSPACE_RESOURCE_SCHEMA.GENERIC_VIDEO],
+        // A merge is the final cut, not a generic video clip: the `final` step
+        // requires a composite/rendered output.
+        outputSchemaIds: [WORKSPACE_RESOURCE_SCHEMA.COMPOSITE_VIDEO],
         placement: 'required',
       },
       confirmation: { kind: 'none', required: false },
       assistantWriteAuthority: {
         kind: 'temporal_operation_execution',
-        contractRevision: 'merge_videos/v8',
+        contractRevision: 'merge_videos/v9',
         followUpPolicy: 'after_all_terminal',
       },
       inputSchema: mergeVideosInputSchema,
@@ -253,27 +256,29 @@ export function createWorkspaceResourceVideoMergeOperations(): ProjectAgentOpera
           ctx.toolCallId?.trim() || ctx.requestId?.trim() || inputHash,
         ].join(':')
         const resourceId = buildWorkspaceResourceId({ operationId: 'merge_videos', requestId, memberIndex: 0 })
+        const outputSchemaId = WORKSPACE_RESOURCE_SCHEMA.COMPOSITE_VIDEO
+        const folderPath = resolveProductionFolderPath(input.folderPath, outputSchemaId)
         const outputPath = await resolveGeneratedWorkspaceResourcePlacement(prisma, {
           userId: ctx.userId,
           projectId: ctx.projectId,
-          folderPath: input.folderPath,
+          folderPath,
           name: input.name,
           resourceId,
           mediaType: 'video',
-          schemaId: WORKSPACE_RESOURCE_SCHEMA.GENERIC_VIDEO,
+          schemaId: outputSchemaId,
         })
         const generationOptions = { mergeMode: musicCues.length > 0 ? 'score_cues' : 'ordered_concat', ...input.output }
         const payload = {
           lifecycleProjection: buildWorkspaceResourceLifecycleProjection([{
             resourceId,
             mediaType: 'video',
-            schemaId: WORKSPACE_RESOURCE_SCHEMA.GENERIC_VIDEO,
+            schemaId: outputSchemaId,
             name: workspaceResourceDisplayName({ workspacePath: outputPath, resourceId }),
           }]),
           resource: {
             resourceId,
             mediaType: 'video' as const,
-            schemaId: WORKSPACE_RESOURCE_SCHEMA.GENERIC_VIDEO,
+            schemaId: outputSchemaId,
             prompt: null,
             modelKey: null,
             inputHash,
@@ -302,11 +307,11 @@ export function createWorkspaceResourceVideoMergeOperations(): ProjectAgentOpera
           dedupeKey: `merge_videos:${resourceId}:${inputHash}`,
           locale: resolveOperationLocale(ctx.context),
           onTaskCreatedInTransaction: async (tx, task) => {
-            if (input.folderPath) {
+            if (folderPath) {
               await createWorkspaceResourceFolderInTransaction(tx, {
                 userId: ctx.userId,
                 projectId: ctx.projectId,
-                workspacePath: input.folderPath,
+                workspacePath: folderPath,
                 sourceType: 'operation_output_folder',
                 sourceId: null,
               })
@@ -321,7 +326,7 @@ export function createWorkspaceResourceVideoMergeOperations(): ProjectAgentOpera
               projectId: ctx.projectId,
               outputPath,
               mediaType: 'video',
-              schemaId: WORKSPACE_RESOURCE_SCHEMA.GENERIC_VIDEO,
+              schemaId: outputSchemaId,
               operationId: 'merge_videos',
               inputHash,
               taskId: task.id,

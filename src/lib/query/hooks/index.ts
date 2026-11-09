@@ -81,6 +81,10 @@ export {
 } from './useProductionOverview'
 
 export {
+    useProductionStepContent,
+} from './useProductionStepContent'
+
+export {
     useWorkspaceResourceVersions,
     useWorkspaceResourceVersion,
 } from './useWorkspaceResourceVersions'

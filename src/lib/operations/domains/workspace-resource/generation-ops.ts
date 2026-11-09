@@ -69,6 +69,7 @@ import {
   WORKSPACE_RESOURCE_SCHEMA,
   requireWorkspaceResourceSchema,
 } from '@/lib/workspace-resource/schema-registry'
+import { resolveProductionFolderPath } from '@/lib/workspace-resource/production-stages'
 import { buildWorkspaceResourceLifecycleProjection } from '@/lib/workspace-resource/task-runtime-envelope'
 import { defineOperation } from '@/lib/operations/define-operation'
 import { resolveOperationLocale } from '@/lib/operations/environment-input'
@@ -951,6 +952,12 @@ async function buildPlannedItem(input: {
     mediaType,
     input.existingTarget?.schemaId ?? input.item.schemaId,
   )
+  // Placement convention: an explicit folder always wins; otherwise the
+  // artifact lands in its step folder so the step view and the directory view
+  // read the same file. Existing targets keep their current path.
+  const folderPath = input.existingTarget
+    ? null
+    : resolveProductionFolderPath(input.item.folderPath, schemaId)
   const requestedAssetKind = input.item.mediaType === 'image' ? input.item.assetKind : null
   const ratioOwner = resolveGenerationAspectRatioOwner(input.item)
   const usesProjectVideoRatio = ratioOwner === 'project'
@@ -973,7 +980,7 @@ async function buildPlannedItem(input: {
     ?? await resolveGeneratedWorkspaceResourcePlacement(prisma, {
       userId: input.ctx.userId,
       projectId: input.ctx.projectId,
-      folderPath: input.item.folderPath,
+      folderPath,
       name: input.item.name,
       resourceId,
       mediaType,
@@ -1071,7 +1078,7 @@ async function buildPlannedItem(input: {
     resource: {
       resourceId,
       workspacePath,
-      folderPath: input.existingTarget ? null : input.item.folderPath ?? null,
+      folderPath,
       mediaType,
       schemaId,
       memberIndex: input.existingTarget?.memberIndex ?? input.memberIndex,
@@ -1616,11 +1623,15 @@ export function createWorkspaceResourceGenerationOperations(): ProjectAgentOpera
           requestId: requestIdentity(ctx, 'save_project_document', input),
           memberIndex: 0,
         })
-        if (input.folderPath) {
+        // Saved documents follow the same step-folder convention as generated
+        // media unless the caller explicitly chooses another folder. `null`
+        // keeps its documented meaning: the project root.
+        const folderPath = resolveProductionFolderPath(input.folderPath, schemaId)
+        if (folderPath) {
           await createWorkspaceResourceFolderInTransaction(tx, {
             userId: ctx.userId,
             projectId: ctx.projectId,
-            workspacePath: input.folderPath,
+            workspacePath: folderPath,
             sourceType: 'operation_output_folder',
             sourceId: null,
           })
@@ -1628,7 +1639,7 @@ export function createWorkspaceResourceGenerationOperations(): ProjectAgentOpera
         const outputPath = await resolveSavedWorkspaceDocumentPlacement(tx, {
           userId: ctx.userId,
           projectId: ctx.projectId,
-          folderPath: input.folderPath,
+          folderPath,
           name: input.name,
           resourceId,
           contentKind: input.content.kind,

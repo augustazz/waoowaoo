@@ -82,7 +82,10 @@ import { useCanvasMultiSelection } from './hooks/useCanvasMultiSelection'
 import { isWorkspaceCanvasEditableTarget } from './canvas-interaction-target'
 import { CanvasOperationConfirmationModal } from './actions/CanvasOperationConfirmationModal'
 import { WorkspaceResourcePreviewModal } from './preview/WorkspaceResourcePreviewModal'
-import { ProductionStageRail } from './stages/ProductionStageRail'
+import { ProductionStepNavigation } from './stages/ProductionStepNavigation'
+import { productionStageDefinition } from '@/lib/workspace-resource/production-stages'
+import type { ProductionContentView } from '@/lib/workspace-resource/step-navigation'
+import { useActiveProductionStep } from './hooks/useActiveProductionStep'
 import { ScreenplayWorkbench } from './script/ScreenplayWorkbench'
 import { workspaceNodeId } from './workspace-canvas-node-ids'
 import { useCanvasUploadQueue, type CanvasUploadQueueItem } from './upload/useCanvasUploadQueue'
@@ -206,12 +209,16 @@ function ProjectWorkspaceFolderCanvas({
   activeAssistantFocusRequest = null,
   assistantTurnOutcomes = EMPTY_TURN_OUTCOMES,
   onOpenWorkspacePath,
+  contentView,
+  onContentViewChange,
 }: ProjectWorkspaceCanvasContentProps & {
   readonly folder: CurrentCanvasFolder
   readonly rootName: string
   readonly pendingLocateResourceId: string | null
   readonly onNavigate: (folder: CurrentCanvasFolder, locateResourceId?: string | null) => void
   readonly onLocateConsumed: () => void
+  readonly contentView: ProductionContentView
+  readonly onContentViewChange: (view: ProductionContentView) => void
 }) {
   const t = useTranslations('projectWorkflow.canvas.workspace')
   const tCreate = useTranslations('projectWorkflow.canvas.workspace.create')
@@ -219,6 +226,13 @@ function ProjectWorkspaceFolderCanvas({
   const { data: projectData } = useProjectData(projectId)
   const projectAspectRatio = projectData?.videoRatio ?? null
   const currentFolderPath = folder.folderKey === WORKSPACE_RESOURCE_ROOT_FOLDER_KEY ? null : folder.workspacePath
+  // In the step view, new files must land in the selected step's folder so the
+  // step panel and the file tree agree. The full-files view keeps the folder
+  // the user actually navigated to.
+  const { activeStep } = useActiveProductionStep(projectId)
+  const creationFolderPath = contentView === 'step'
+    ? productionStageDefinition(activeStep).defaultFolderPath
+    : currentFolderPath
   const generationCapabilitiesQuery = useCanvasGenerationCapabilities(projectId)
   const generationCapabilities = generationCapabilitiesQuery.isError || generationCapabilitiesQuery.isFetching ? null : generationCapabilitiesQuery.data ?? null
   const folderQuery = useWorkspaceResources({
@@ -312,7 +326,7 @@ function ProjectWorkspaceFolderCanvas({
   }, [pinResourcePositions])
   const uploadQueue = useCanvasUploadQueue({
     projectId,
-    folderPath: currentFolderPath,
+    folderPath: creationFolderPath,
     onMaterialized: placeUploadedResource,
   })
   const {
@@ -359,12 +373,12 @@ function ProjectWorkspaceFolderCanvas({
   ), [projectedNodes])
   const buildDraftMessage = useCallback((composition: CanvasDraftComposition) => buildCanvasDraftMessage({
     composition,
-    folderPath: currentFolderPath,
+    folderPath: creationFolderPath,
     t: (key, values) => tCreate(key, values),
-  }), [currentFolderPath, tCreate])
+  }), [creationFolderPath, tCreate])
   const createDraft = useCanvasCreateDraft({
     projectId,
-    folderPath: currentFolderPath,
+    folderPath: creationFolderPath,
     projectAspectRatio,
     capabilities: generationCapabilities,
     turnOutcomes: assistantTurnOutcomes,
@@ -1039,6 +1053,7 @@ function ProjectWorkspaceFolderCanvas({
           proOptions={WORKSPACE_REACT_FLOW_PRO_OPTIONS}
         >
           <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
+          {contentView === 'files' ? (
           <Panel position="top-left" className="!z-[80] !m-0" style={{ left: 16, top: 72 }}>
             <CanvasFolderNavigation
               canGoBack={folder.folderKey !== WORKSPACE_RESOURCE_ROOT_FOLDER_KEY}
@@ -1065,6 +1080,7 @@ function ProjectWorkspaceFolderCanvas({
               onLoadMoreSearch={() => { void searchQuery.fetchNextPage() }}
             />
           </Panel>
+          ) : null}
           {folderQuery.isFetchingNextPage ? (
             <Panel position="top-right" className="!m-0" style={{ right: 16, top: 16 }}>
               <span className="rounded-full bg-white/90 px-3 py-1.5 text-xs text-[var(--glass-text-secondary)] shadow-sm">
@@ -1088,7 +1104,7 @@ function ProjectWorkspaceFolderCanvas({
             <ViewportPortal key={createDraft.draft.id}>
               <WorkspaceCanvasDraftCard
                 projectId={projectId}
-                folderPath={currentFolderPath}
+                folderPath={creationFolderPath}
                 onAddReference={createDraft.addReference}
                 onUploadedReference={(resourceId, reused) => {
                   if (!reused && createDraft.draft) pinResourcePositions([resourceId], createDraft.draft.position)
@@ -1176,8 +1192,10 @@ function ProjectWorkspaceFolderCanvas({
             />
           </Panel>
         </ReactFlow>
-        <ProductionStageRail
+        <ProductionStepNavigation
           projectId={projectId}
+          contentView={contentView}
+          onContentViewChange={onContentViewChange}
           onOpenResourcePath={(workspacePath) => onOpenWorkspacePath?.(workspacePath)}
           onOpenScreenplay={setScreenplayResourceId}
           onAssistantDraft={(text) => requestAssistantDraft(text)}
@@ -1281,6 +1299,9 @@ function ProjectWorkspaceCanvasContent(props: ProjectWorkspaceCanvasContentProps
     ancestors: [],
   })
   const [pendingLocateResourceId, setPendingLocateResourceId] = useState<string | null>(null)
+  // Content view lives above the per-folder canvas so a folder jump (e.g.
+  // locating a file) does not reset it or bounce the user back to step view.
+  const [contentView, setContentView] = useState<ProductionContentView>('step')
   const pathFocusQuery = useWorkspaceResourceByPath({
     projectId,
     workspacePath: props.workspacePathFocusRequest?.workspacePath ?? null,
@@ -1315,6 +1336,8 @@ function ProjectWorkspaceCanvasContent(props: ProjectWorkspaceCanvasContentProps
       pendingLocateResourceId={pendingLocateResourceId}
       onNavigate={navigate}
       onLocateConsumed={() => setPendingLocateResourceId(null)}
+      contentView={contentView}
+      onContentViewChange={setContentView}
     />
   )
 }
