@@ -23,6 +23,7 @@ export interface StoredProvider {
 }
 
 export interface StoredModel {
+  videoAvailability?: import('@/lib/ai-registry/video-availability').VideoModelAvailability
   modelId: string
   modelKey: string
   name: string

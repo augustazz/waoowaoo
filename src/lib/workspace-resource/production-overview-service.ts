@@ -29,6 +29,7 @@ export async function readProductionOverview(input: {
         deletedAt: null,
         activePath: { not: null },
         resourceKind: 'file',
+        workflowEnabled: true,
         // Folder-first ownership with schema fallback, matching the step view.
         // Uploads and generic media have no step schema, so a schema-only query
         // would report them missing from the step that visually owns them.

@@ -1,4 +1,6 @@
 import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
+import { AppError } from '@/lib/errors/app-error'
+import { imageReferenceCountIssue } from '@/lib/ai-registry/generation-reference-policy'
 
 export type GoogleContentPart =
   | { inlineData: { mimeType: string; data: string } }
@@ -14,7 +16,7 @@ function parseDataUrl(value: string): { mimeType: string; base64: string } | nul
   if (!value.startsWith('data:') || markerIndex === -1) return null
   const mimeType = value.slice(5, markerIndex)
   const base64 = value.slice(markerIndex + marker.length)
-  if (!mimeType || !base64) return null
+  if (!/^image\/[\w.+-]+$/u.test(mimeType) || !/^[A-Za-z0-9+/]+={0,2}$/u.test(base64) || Buffer.from(base64, 'base64').length === 0) return null
   return { mimeType, base64 }
 }
 
@@ -58,4 +60,24 @@ export async function toGoogleInlineData(
   const parsedNormalized = parseDataUrl(base64DataUrl)
   if (!parsedNormalized) return null
   return { mimeType: parsedNormalized.mimeType, data: parsedNormalized.base64 }
+}
+
+/** Resolve every ordered reference before submission; never shift Prompt image numbers. */
+export async function loadGoogleImageReferences(
+  references: readonly string[],
+  maxImages: number | undefined,
+): Promise<GoogleContentPart[]> {
+  const issue = imageReferenceCountIssue(maxImages, references.length)
+  if (issue) throw new AppError('INVALID_PARAMS', issue.code, { provider: 'google', details: { ...issue } })
+  return await Promise.all(references.map(async (source, index): Promise<GoogleContentPart> => {
+    try {
+      const inlineData = await toGoogleInlineData(source)
+      if (!inlineData) throw new Error('IMAGE_REFERENCE_DATA_INVALID')
+      return { inlineData }
+    } catch (cause) {
+      throw new AppError('INVALID_PARAMS', `IMAGE_REFERENCE_READ_FAILED:${String(index + 1)}`, {
+        provider: 'google', cause, details: { reasonCode: 'IMAGE_REFERENCE_READ_FAILED', referenceIndex: index + 1 },
+      })
+    }
+  }))
 }

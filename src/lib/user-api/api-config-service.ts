@@ -56,6 +56,7 @@ import {
   hasStoredProviderCredential,
   assertSingleMediaModelSelections,
 } from './effective-config'
+import { resolveVideoModelAvailability } from '@/lib/ai-registry/video-availability'
 
 function defaultModelsFromPreference(pref: { assistantModel?: string | null } | null): DefaultModelsPayload {
   return { assistantModel: pref?.assistantModel || '' }
@@ -121,7 +122,12 @@ export async function getUserApiConfig(userId: string) {
   )
 
   return {
-    models: pricedModels,
+    models: pricedModels.map((model) => {
+      if (model.type !== 'video') return model
+      const provider = storedProviders.find((entry) => entry.id === model.provider)
+      const resolved = resolveVideoModelAvailability(model.modelKey, provider)
+      return { ...model, videoAvailability: { status: resolved.status, reason: resolved.reason } }
+    }),
     providers,
     catalog,
     fixedParameterFields,
@@ -217,6 +223,15 @@ export async function putUserApiConfig(
     assertSingleMediaModelSelections(normalizedModels)
     validateModelProviderConsistency(normalizedModels, providerSourceForValidation)
     validateModelProviderTypeSupport(normalizedModels, providerSourceForValidation)
+    for (const model of normalizedModels.filter((entry) => entry.type === 'video')) {
+      const resolved = resolveVideoModelAvailability(model.modelKey, nextProviders.find((entry) => entry.id === model.provider))
+      // Preserve legacy unavailable selections for unrelated edits, but do not
+      // let a new choice silently install an unexecutable production model.
+      const retained = existingModels.some((entry) => entry.type === 'video' && entry.modelKey === model.modelKey)
+      if (resolved.reason && !retained) throw new ApiError('INVALID_PARAMS', {
+        code: 'PRODUCTION_MODEL_CONFIGURATION_UNAVAILABLE', field: 'models', reason: resolved.reason,
+      })
+    }
     if (billingMode !== 'OFF') {
       validateBillableModelPricing(normalizedModels)
     }

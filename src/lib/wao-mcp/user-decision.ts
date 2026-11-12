@@ -63,9 +63,10 @@ export const WAO_MCP_USER_DECISION_TOOL: Tool = {
   name: WAO_MCP_USER_DECISION_TOOL_NAME,
   description: [
     'Ask the current Wao user one necessary, non-sensitive product decision and wait for a structured answer.',
-    'Use only when the missing choice would materially change the result and cannot be inferred safely.',
+    'Use when an explicit creative checkpoint requires the user\'s choice, including image-style selection before generation, or when a missing choice would materially change the result and cannot be inferred safely.',
     'Do not use for credentials, secrets, billing approval, permissions, destructive confirmation, or information already supplied by the user.',
-    'Provide 2-4 mutually exclusive options with stable ids. Set otherLabel in the user\'s language only when a free-form answer is useful.',
+    'Always include header, question, and options. The question is required even when the header names the decision; pass it as a separate top-level string.',
+    'Provide 2-4 mutually exclusive options with stable ids. Pass options as a JSON array, not a serialized string. Set otherLabel in the user\'s language only when a free-form answer is useful.',
   ].join(' '),
   inputSchema: {
     type: 'object',
@@ -134,11 +135,76 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function parseJsonValue(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Some model runtimes serialize nested arrays of objects as JSON strings when
+ * bridging MCP tool arguments. Accept that representation so a valid decision
+ * card still reaches the user instead of failing before the elicitation.
+ */
+function normalizeUserDecisionOptions(value: unknown): unknown {
+  const parsed = typeof value === 'string' ? parseJsonValue(value) : value
+  if (!Array.isArray(parsed)) return parsed
+  return parsed.map((entry) => {
+    if (typeof entry !== 'string') return entry
+    const candidate = parseJsonValue(entry)
+    return isRecord(candidate) ? candidate : entry
+  })
+}
+
+function normalizeUserDecisionInput(value: unknown): unknown {
+  const parsed = typeof value === 'string' ? parseJsonValue(value) : value
+  if (!isRecord(parsed)) return parsed
+  const options = normalizeUserDecisionOptions(parsed.options)
+  if (!Array.isArray(options) && typeof parsed.options === 'string') {
+    // Some runtimes leave the remaining argument fields inside the options
+    // string, with JSON quotes still escaped. Re-wrap only a complete JSON
+    // fragment; never infer missing content or overwrite conflicting fields.
+    const decoded = parseJsonValue(`"${parsed.options}"`)
+    const candidates = [parsed.options, ...(typeof decoded === 'string' ? [decoded] : [])]
+    for (const candidate of candidates) {
+      for (const suffix of ['', '}']) {
+        const fields = parseJsonValue(`{"options":${candidate}${suffix}`)
+        if (!isRecord(fields) || !Array.isArray(fields.options)) continue
+        if (Object.keys(fields).some((key) => (
+          key !== 'options' && key !== 'question' && key !== 'otherLabel'
+        ))) continue
+        if (Object.entries(fields).some(([key, field]) => (
+          key !== 'options' && Object.hasOwn(parsed, key) && parsed[key] !== field
+        ))) continue
+        return { ...parsed, ...fields, options: normalizeUserDecisionOptions(fields.options) }
+      }
+    }
+  }
+  return {
+    ...parsed,
+    options,
+  }
+}
+
+export class WaoMcpUserDecisionInputError extends Error {
+  readonly details: string
+
+  constructor(error: z.ZodError) {
+    super('WAO_MCP_USER_DECISION_INPUT_INVALID')
+    this.name = 'WaoMcpUserDecisionInputError'
+    this.details = error.issues.map((issue) => (
+      `${issue.path.join('.') || 'arguments'}: ${issue.message}`
+    )).join('; ')
+  }
+}
+
 export function parseWaoMcpUserDecisionInput(
   value: unknown,
 ): WaoMcpUserDecisionInput {
-  const parsed = inputSchema.safeParse(value)
-  if (!parsed.success) throw new Error('WAO_MCP_USER_DECISION_INPUT_INVALID')
+  const parsed = inputSchema.safeParse(normalizeUserDecisionInput(value))
+  if (!parsed.success) throw new WaoMcpUserDecisionInputError(parsed.error)
   return parsed.data
 }
 

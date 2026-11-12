@@ -60,6 +60,9 @@ function projectConfiguredModel(
     if (isObject(properties.references)) properties.references = {
       ...properties.references,
       description: 'The server derives input mode from reference roles. Obey the model’s supportedInputModes, per-channel counts and audio constraints; context references are not sent to the provider.',
+      ...(model.referenceInputUnavailableReason === 'deployment_media_transport' ? {
+        description: 'Some native reference inputs are unavailable because the deployment media transport is incompatible with this provider. Obey supportedInputModes and channel counts. Explain the transport limitation; never silently remove required references or submit text-only video instead.',
+      } : {}),
     }
   }
   if ('languageOptions' in model) {

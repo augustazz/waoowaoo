@@ -36,8 +36,15 @@ import {
   workspacePathAncestors,
 } from './path'
 import { resolveActiveWorkspaceResourceByPath } from './persistence'
+import {
+  productionStageDefinition,
+  productionStageFolderPaths,
+  productionStageForResource,
+  type ProductionStageKey,
+} from './production-stages'
 import { readWorkspaceResourceRevision } from './projection-revision'
 import { projectWorkspaceResourceRegenerationAction } from './regeneration-projection'
+import { projectOrderedReferenceInputs } from './reference-projection'
 
 const DEFAULT_PAGE_SIZE = 100
 const MAX_PAGE_SIZE = 200
@@ -52,6 +59,7 @@ const resourceSelect = {
   schemaId: true,
   name: true,
   status: true,
+  workflowEnabled: true,
   currentVersion: true,
   prompt: true,
   modelKey: true,
@@ -69,6 +77,7 @@ const resourceSelect = {
 type ResourceRow = Prisma.WorkspaceResourceGetPayload<{ select: typeof resourceSelect }>
 
 const versionInclude = {
+  posterMedia: { select: { publicId: true } },
   media: {
     select: {
       id: true,
@@ -124,6 +133,7 @@ async function versionContent(row: VersionRow): Promise<WorkspaceResourceContent
       width: row.media.width,
       height: row.media.height,
       durationMs: row.media.durationMs,
+      posterUrl: row.posterMedia ? `/m/${encodeURIComponent(row.posterMedia.publicId)}` : null,
     }
   }
   const content = await readWorkspaceResourceTextContent(row.media.storageKey)
@@ -171,19 +181,30 @@ function projectActions(input: {
       || input.resource.operationId === 'create_image'
       || input.resource.operationId === 'create_audio'
       || input.resource.operationId === 'create_video'
+      || input.resource.operationId === 'merge_videos'
       ? input.resource.operationId
       : input.resource.operationId === 'rerun_failed_production_items'
         ? 'rerun_failed_production_items'
         : null
   const retryInput: WorkspaceResourceJsonObject | null = retryOperationId === 'rerun_failed_production_items'
     ? { resourceIds: [input.resource.id] }
+    : retryOperationId === 'merge_videos'
+      ? { request: { kind: 'retry', resourceId: input.resource.id, expectedTaskId: input.resource.taskId } }
     : retryOperationId
       ? { request: { kind: 'retry', resourceIds: [input.resource.id] } }
       : null
   return [
     {
+      kind: 'toggle_workflow',
+      enabled: input.resource.status !== 'pending' && input.resource.deletedAt === null,
+      operationId: 'set_resource_workflow',
+      input: { resourceId: input.resource.id, workflowEnabled: !input.resource.workflowEnabled },
+      href: null,
+      approvalInputHash: null,
+    },
+    {
       kind: 'retry',
-      enabled: retryOperationId !== null,
+      enabled: retryOperationId !== null && input.resource.workflowEnabled && input.resource.deletedAt === null && Boolean(input.resource.taskId),
       operationId: retryOperationId,
       input: retryInput,
       href: null,
@@ -196,14 +217,20 @@ function projectActions(input: {
         mediaType: input.mediaType,
         schemaId: input.resource.schemaId,
         status: input.resource.status,
+        workflowEnabled: input.resource.workflowEnabled && input.resource.deletedAt === null,
+        currentVersion: input.resource.currentVersion,
         prompt: input.resource.prompt,
         modelKey: input.resource.modelKey,
         generationOptions: jsonProjection(input.resource.generationOptions),
         inputs: input.inputs.map((reference) => ({
           resourceId: reference.resourceId,
+          workflowEnabled: reference.workflowEnabled,
           contentVersion: reference.contentVersion,
           role: reference.role,
           mediaType: reference.mediaType,
+          position: reference.position,
+          channel: reference.channel,
+          purpose: reference.purpose,
         })),
         taskPayload: input.resource.task?.payload ?? null,
       })
@@ -257,7 +284,7 @@ async function loadViews(
     .map((row) => ({ resourceId: row.id, version: row.currentVersion }))
   const lineage = versionKeys.length === 0 ? [] : await prisma.workspaceResourceLineage.findMany({
     where: { OR: versionKeys.map((entry) => ({ outputResourceId: entry.resourceId, outputVersion: entry.version })) },
-    orderBy: [{ outputResourceId: 'asc' }, { outputVersion: 'asc' }, { role: 'asc' }, { position: 'asc' }],
+    orderBy: [{ outputResourceId: 'asc' }, { outputVersion: 'asc' }, { position: 'asc' }],
   })
   const inputVersionKeys = lineage.map((entry) => ({ resourceId: entry.inputResourceId, version: entry.inputVersion }))
   const alternativeGroupIds = Array.from(new Set(
@@ -295,7 +322,6 @@ async function loadViews(
     const key = `${folder.projectId}:${folder.workspacePath}`
     if (!folderByProjectPath.has(key) || folder.deletedAt === null) folderByProjectPath.set(key, folder)
   }
-  const inputsByOutput = new Map<string, WorkspaceResourceInputRef[]>()
   const summariesByOutput = new Map<string, WorkspaceResourceInputSummary[]>()
   for (const entry of lineage) {
     const key = `${entry.outputResourceId}:${String(entry.outputVersion)}`
@@ -313,12 +339,12 @@ async function loadViews(
       position: entry.position,
     }
     const inputVersion = versionByKey.get(`${entry.inputResourceId}:${String(entry.inputVersion)}`)
-    inputsByOutput.set(key, [...(inputsByOutput.get(key) ?? []), ref])
     summariesByOutput.set(key, [
       ...(summariesByOutput.get(key) ?? []),
       {
         ...ref,
         resourceKind: 'file',
+        workflowEnabled: source.workflowEnabled,
         mediaType,
         schemaId: source.schemaId,
         name: workspaceResourceDisplayName({
@@ -326,6 +352,7 @@ async function loadViews(
           resourceId: source.id,
         }),
         previewUrl: previewUrl(inputVersion),
+        posterUrl: inputVersion?.posterMedia ? `/m/${encodeURIComponent(inputVersion.posterMedia.publicId)}` : null,
         durationMs: inputVersion?.contentKind === 'media' ? inputVersion.media.durationMs : null,
       },
     ])
@@ -344,8 +371,13 @@ async function loadViews(
       schemaId: sibling.schemaId,
       mediaType: requireMediaType(sibling.mediaType),
       status: requireStatus(sibling.status),
+      workflowEnabled: sibling.workflowEnabled,
       memberIndex: sibling.memberIndex,
       previewUrl: previewUrl(versionByKey.get(`${sibling.id}:${String(sibling.currentVersion)}`)),
+      posterUrl: (() => {
+        const poster = versionByKey.get(`${sibling.id}:${String(sibling.currentVersion)}`)?.posterMedia
+        return poster ? `/m/${encodeURIComponent(poster.publicId)}` : null
+      })(),
     }
     alternativeMembersByGroup.set(groupId, [...(alternativeMembersByGroup.get(groupId) ?? []), member])
   }
@@ -375,6 +407,7 @@ async function loadViews(
       createdAt: version.createdAt.toISOString(),
     } : null
     const lineageKey = `${row.id}:${String(row.currentVersion)}`
+    const inputSummaries = projectOrderedReferenceInputs(summariesByOutput.get(lineageKey) ?? [], row.task?.payload, row.generationOptions)
     const groupMembers = row.alternativeGroupExecutionId
       ? alternativeMembersByGroup.get(row.alternativeGroupExecutionId) ?? []
       : []
@@ -393,6 +426,7 @@ async function loadViews(
               width: version.media.width,
               height: version.media.height,
               durationMs: version.media.durationMs,
+              posterUrl: version.posterMedia ? `/m/${encodeURIComponent(version.posterMedia.publicId)}` : null,
             }
           : version.contentKind === 'structured'
             ? { kind: 'structured', preview: version.contentPreview }
@@ -411,6 +445,7 @@ async function loadViews(
         resourceKind,
       }),
       status: requireStatus(row.status),
+      workflowEnabled: row.workflowEnabled,
       contentVersion: resourceKind === 'folder' ? 0 : row.currentVersion,
       current,
       summary,
@@ -421,13 +456,15 @@ async function loadViews(
       memberIndex: row.memberIndex,
       alternativeGroupExecutionId: row.alternativeGroupExecutionId,
       alternativeGroup,
-      inputs: inputsByOutput.get(lineageKey) ?? [],
-      inputSummaries: summariesByOutput.get(lineageKey) ?? [],
+      inputs: inputSummaries.map(({ resourceId, contentVersion, workspacePath, role, position, channel, purpose }) => ({
+        resourceId, contentVersion, workspacePath, role, position, channel, ...(purpose ? { purpose } : {}),
+      })),
+      inputSummaries,
       actions: projectActions({
         resource: row,
         current: version,
         mediaType,
-        inputs: summariesByOutput.get(lineageKey) ?? [],
+        inputs: inputSummaries,
       }),
       taskId: row.taskId,
       error: (() => {
@@ -484,7 +521,14 @@ export async function listWorkspaceResourceTreePage(input: {
   readonly cursor?: string | null
   readonly limit?: number
   readonly deleted?: boolean
+  readonly includeDisabled?: boolean
   readonly scope?: WorkspaceResourceTreeScope
+  /**
+   * Restrict the page to one production step's artifacts. Ownership is the same
+   * folder-first rule as the step content panel, so the canvas and the panel
+   * always show the same files.
+   */
+  readonly step?: ProductionStageKey | null
 }): Promise<WorkspaceResourceTreePage> {
   const revision = await readWorkspaceResourceRevision(input)
   const limit = requireLimit(input.limit)
@@ -493,6 +537,16 @@ export async function listWorkspaceResourceTreePage(input: {
   const parentPath = input.prefix?.trim()
     ? validateWorkspaceResourceFolderPath(input.prefix.trim())
     : null
+  const stepDefinition = input.step ? productionStageDefinition(input.step) : null
+  const stepWhere: Prisma.WorkspaceResourceWhereInput = stepDefinition ? {
+    resourceKind: 'file',
+    OR: [
+      { schemaId: { in: [...stepDefinition.schemaIds] } },
+      ...productionStageFolderPaths(stepDefinition.key).map((folderPath) => ({
+        workspacePath: { startsWith: `${folderPath}/` },
+      })),
+    ],
+  } : {}
   const cursorWhere: Prisma.WorkspaceResourceWhereInput = cursor ? {
     OR: [
       { workspacePath: { gt: cursor.workspacePath } },
@@ -504,7 +558,14 @@ export async function listWorkspaceResourceTreePage(input: {
     projectId: input.projectId,
     ...(input.deleted ? { deletedAt: { not: null } } : { deletedAt: null, activePath: { not: null } }),
     ...(search ? { workspacePath: { contains: search } } : {}),
+    ...stepWhere,
+    ...(input.includeDisabled ? {} : { workflowEnabled: true }),
   }
+  const ownedRows = <Row extends { readonly workspacePath: string; readonly schemaId: string }>(
+    rows: readonly Row[],
+  ): readonly Row[] => input.step
+    ? rows.filter((row) => productionStageForResource(row) === input.step)
+    : rows
   if (!search) {
     const candidates = await prisma.workspaceResource.findMany({
       where: baseWhere,
@@ -513,13 +574,14 @@ export async function listWorkspaceResourceTreePage(input: {
       select: resourceSelect,
     })
     if (candidates.length > MAX_RUNTIME_RESOURCES) throw new Error('WORKSPACE_RESOURCE_RUNTIME_LIMIT_EXCEEDED')
+    const ownedCandidates = ownedRows(candidates)
     const directChildren = input.scope === 'subtree'
-      ? candidates.filter((row) => (
+      ? ownedCandidates.filter((row) => (
           parentPath === null
             ? true
             : isWorkspaceSubtreePath(row.workspacePath, parentPath) && row.workspacePath !== parentPath
         ))
-      : candidates.filter((row) => parentWorkspacePath(row.workspacePath) === parentPath)
+      : ownedCandidates.filter((row) => parentWorkspacePath(row.workspacePath) === parentPath)
     const afterCursor = cursor ? directChildren.filter((row) => (
       row.workspacePath > cursor.workspacePath
       || (row.workspacePath === cursor.workspacePath && row.id > cursor.id)
@@ -534,20 +596,31 @@ export async function listWorkspaceResourceTreePage(input: {
       revision,
     }
   }
-  const rows = await prisma.workspaceResource.findMany({
-    where: {
-      ...baseWhere,
-      AND: [cursorWhere],
-    },
-    orderBy: [{ workspacePath: 'asc' }, { id: 'asc' }],
-    take: limit + 1,
-    select: resourceSelect,
-  })
-  const pageRows = rows.slice(0, limit)
+  // Step ownership is folder-first and cannot be expressed by stepWhere's
+  // broad schema/folder union. Keep scanning until the filtered page has a
+  // lookahead row, even when an entire database window belongs to another step.
+  const matchingRows: ResourceRow[] = []
+  let scanWhere = cursorWhere
+  while (matchingRows.length <= limit) {
+    const rows = await prisma.workspaceResource.findMany({
+      where: { ...baseWhere, AND: [scanWhere] },
+      orderBy: [{ workspacePath: 'asc' }, { id: 'asc' }],
+      take: limit + 1,
+      select: resourceSelect,
+    })
+    matchingRows.push(...ownedRows(rows))
+    const scannedLast = rows.at(-1)
+    if (rows.length <= limit || !scannedLast) break
+    scanWhere = { OR: [
+      { workspacePath: { gt: scannedLast.workspacePath } },
+      { workspacePath: scannedLast.workspacePath, id: { gt: scannedLast.id } },
+    ] }
+  }
+  const pageRows = matchingRows.slice(0, limit)
   const last = pageRows.at(-1)
   return {
     items: await loadViews(pageRows, { includeContent: false }),
-    nextCursor: rows.length > limit && last
+    nextCursor: matchingRows.length > limit && last
       ? encodeCursor({ workspacePath: last.workspacePath, id: last.id })
       : null,
     revision,
@@ -559,7 +632,7 @@ export async function listAllWorkspaceResourcesForRuntime(input: {
   readonly projectId: string
 }): Promise<readonly WorkspaceResourceView[]> {
   const rows = await prisma.workspaceResource.findMany({
-    where: { userId: input.userId, projectId: input.projectId, deletedAt: null, activePath: { not: null } },
+    where: { userId: input.userId, projectId: input.projectId, deletedAt: null, activePath: { not: null }, workflowEnabled: true },
     orderBy: [{ workspacePath: 'asc' }, { id: 'asc' }],
     take: MAX_RUNTIME_RESOURCES + 1,
     select: resourceSelect,

@@ -12,9 +12,8 @@ import type {
   WorkspaceResourceRegenerationTemplate,
 } from '@/lib/workspace-resource/regeneration'
 import { workspaceCanvasScrollableRegionProps } from '../canvas-scroll-lock'
-import { AspectRatioPicker } from '../controls/AspectRatioPicker'
 import { GenerationParameterFields } from '../controls/GenerationParameterFields'
-import { resolveCanvasAspectRatioChoices, type CanvasGenerationCapability } from '../create/canvas-draft'
+import type { CanvasGenerationCapability } from '../create/canvas-draft'
 import { SELECTABLE_TEXT_CLASS } from '../nodes/renderers/renderer-shared'
 import type { useWorkspaceNodeGenerationEdits } from './useWorkspaceNodeGenerationEdits'
 
@@ -143,7 +142,6 @@ export function WorkspaceNodeGenerationEditor({
   const formLabels = useTranslations('projectWorkflow.canvas.workspace.create')
   const adaptiveFrame = canvasUsesAdaptiveFrame(capability, editor.references)
   const roleLabels = useTranslations('projectWorkflow.canvas.workspace.create.referenceRole')
-  const ratioChoices = resolveCanvasAspectRatioChoices(capability, editor.aspectRatio).choices
   const durationChoices = capability?.mediaType === 'video' ? capability.view.durationsSeconds : []
   return (
     <section className={`rounded-[16px] bg-slate-50 p-3 ring-1 transition-shadow ${dropHighlighted ? 'ring-2 ring-slate-500' : 'ring-slate-100'}`}>
@@ -160,7 +158,9 @@ export function WorkspaceNodeGenerationEditor({
           onChange={(event) => editor.setName(event.target.value)}
         />
       </label>
-      {editor.edits.name === template.name ? (
+      {!editor.edits.name ? (
+        <p className="mt-1 text-xs text-[var(--glass-text-tertiary)]">{t('newNameRequired')}</p>
+      ) : editor.edits.name === template.name ? (
         <p className="mt-1 text-xs text-[var(--glass-tone-danger-fg)]">{t('differentNameRequired')}</p>
       ) : null}
       <textarea
@@ -181,20 +181,6 @@ export function WorkspaceNodeGenerationEditor({
         </p>
       ) : null}
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-        {!template.aspectRatioLocked && !adaptiveFrame && ratioChoices.length > 0 ? (
-          <div className="flex items-center gap-2">
-            <span className={`${SELECTABLE_TEXT_CLASS} text-[11px] font-medium text-[var(--glass-text-secondary)]`}>
-              {t('aspectRatio')}
-            </span>
-            <AspectRatioPicker
-              choices={ratioChoices}
-              value={editor.aspectRatio}
-              disabled={disabled}
-              label={t('aspectRatio')}
-              onChange={editor.setAspectRatio}
-            />
-          </div>
-        ) : null}
         {template.mediaType === 'video' && durationChoices.length > 0 ? (
           <label className="flex items-center gap-2 text-[11px] font-medium text-[var(--glass-text-secondary)]">
             <span className={SELECTABLE_TEXT_CLASS}>{t('duration')}</span>
@@ -216,6 +202,11 @@ export function WorkspaceNodeGenerationEditor({
           </label>
         ) : null}
       </div>
+      {!adaptiveFrame && editor.aspectRatio ? (
+        <p className="mt-1 text-[11px] text-[var(--glass-text-tertiary)]">
+          {t('projectAspectRatio', { ratio: editor.aspectRatio })}
+        </p>
+      ) : null}
       {adaptiveFrame ? <p className="mt-2 text-xs text-slate-500">{formLabels('adaptiveFrame')}</p> : null}
       <GenerationFormIssues issues={editor.issues} onReviewConfiguration={editor.reviewConfiguration} />
       {capability && capability.view.parameters.length > 0 ? (

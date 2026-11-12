@@ -43,9 +43,26 @@ Episode、Chapter、Scene、Shot、Canon 都是用户目录与文件内容，不
   生成内部冻结位置、验证 Project 所有权并补充当时路径供显示与审计。执行、重试和 Lineage 都只
   消费冻结版本，不能在 Task 开始后重新按路径读取。
   视频编辑的裁剪范围与输出规格必须在提交前对同一媒体版本校验并冻结；执行不得用来源文件属性或生成请求时长替代用户编辑选择。
+  裁剪必须在 30 fps 下至少形成一帧；超出来源时长或配乐来源/时间轴不匹配属于参数错误，返回公开字段的精确纠错路径。
+  合成执行端还须核对冻结输入位置全局唯一、每段对应一个 edit、配乐不越过时间轴，以及 lifecycle 与单一输出身份一致。
+  合成的可选 `cover={videoIndex,offsetSeconds}` 选择保留片段的起始帧或其内部时刻；索引从零开始，
+  偏移相对裁剪后的片段。未指定时取第一段第一帧。提交前冻结片段索引、段内帧和最终时间轴帧号，
+  原参数重试保留该选择。执行端从实际渲染视频按帧号提取 JPEG，与视频使用同一 Task 的稳定产物键
+  上传。终态事务将 `posterMediaId` 和视频一起写入同一 `WorkspaceResourceVersion`；封面读取权限
+  沿版本关系归属用户，画布使用受保护的 `/m/...` 作为 `posterUrl`，不把封面当成独立生成资源。
 - **WR-09 — 一个异步终态 writer。** 生成 Operation 的 commit 事务预留 pending Resource 与 Task；
   Task 终态在同一事务物化版本、Lineage、Resource 状态、Task 终态与通知。replay 返回同一事实，
   不能生成第二 Resource 或重复计费。
+  失败或取消的合成通过 `merge_videos.request.kind=retry` 重放冻结剪辑，修改剪辑后使用
+  `revise_failed`；两者都指定原 `resourceId`，保留名称、路径、schema 与版本历史。画布携带
+  `expectedTaskId` 固定展示过的失败尝试，提交事务再次比较原 Task 和失败状态，再原子绑定新 Task。
+  新 Task 的去重键包含原失败 Task，支持连续失败后的再次重试；成功、pending、禁用及删除资源
+  不可重试。同名新建仍显式报路径冲突，不得按名称自动覆盖或另起“修正版”规避。
+  合成工具声明统一为对象根节点和 `request.kind=new/retry/revise_failed`，联合分支不得放在根上；
+  Tool canonicalizer 将 new 转成原执行输入，API 原有顶层 name/output/videos 格式继续有效。
+  canonicalizer 还必须原样接受已冻结的规范输入，保证 durable Activity 再次经过调用 authority 时
+  不会把规范顶层字段误当成 Tool envelope 的额外字段；对外仍只发布 request envelope。
+  通用 Tool schema 转换器遇到无法发布的根联合类型必须明确失败，不得静默发布空 properties。
 - **WR-10 — 批量生产直接提交结构化 items。** `create_image`、`create_audio`、`create_video` 接收各自
   共享 schema 的批量 items；一次预检形成一个总报价和一个 Grant，再扇出 Task。不存在中间 Manifest
   文件或第二次“读取并提交”；成员有稳定 identity，部分失败只重跑失败成员。
@@ -126,3 +143,19 @@ Episode、Chapter、Scene、Shot、Canon 都是用户目录与文件内容，不
   连接仍把易失 Pub/Sub 当成完整性交接；消息静默丢失且连接保持 OPEN 时只能靠手动刷新恢复 → 上一版
   每次只补一个通知分支，没有给正式 Resource View 持久水位 → 所有 Resource writer 同事务推进唯一
   revision，心跳只比较水位并失效正式 Query（WR-18）。
+
+### Workflow participation
+
+`WorkspaceResource.workflowEnabled` defaults to true and is independent of generation
+status and deletion. `set_resource_workflow` is a reversible, non-billable API Operation
+for files. It preserves paths, immutable versions and lineage, advances the project
+projection revision in the same transaction, and returns the normal mutation receipt.
+Pending files cannot be toggled.
+
+The canvas and content manager explicitly include disabled files for viewing and
+comparison. Default assistant discovery, runtime context and production progress
+exclude them. Explicit reads, previews and downloads remain available. Disabled files
+cannot be attached to a generation draft or accepted as inputs for new work. Submission
+rechecks current participation under the project lock, including previously prepared
+plans and retries. Already accepted jobs continue using their frozen input versions;
+disabling an input does not invalidate historical lineage or cancel downstream jobs.

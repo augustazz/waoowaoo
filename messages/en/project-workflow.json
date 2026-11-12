@@ -1,6 +1,18 @@
 {
   "canvas": {
     "workspace": {
+      "projectAspectRatio": {
+        "label": "Project frame",
+        "current": "Project frame: {ratio}",
+        "unset": "Not set",
+        "portrait": "Portrait",
+        "landscape": "Landscape",
+        "square": "Square",
+        "description": "All new images, storyboards and videos use this project frame. Use 9:16 for vertical mobile video.",
+        "existingUnchanged": "Changes apply to future generations. Existing images and videos keep their original frame and are not regenerated.",
+        "saved": "Project frame updated",
+        "saveFailed": "Could not save the project frame. Try again."
+      },
       "toolbar": {
         "fitView": "Fit view",
         "zoomIn": "Zoom in",
@@ -9,6 +21,12 @@
         "arrangeFailed": "Could not save the layout. Please retry."
       },
       "actions": {
+        "disableWorkflow": "Disable",
+        "restoreWorkflow": "Restore use",
+        "workflowDisabled": "Disabled; still available for comparison",
+        "workflowRestored": "Restored for workflow use",
+        "workflowUpdateFailed": "Failed to update resource participation",
+        "workflowDisabledHint": "Disabled: kept for viewing and comparison; excluded from future generation and step progress.",
         "discuss": "Discuss with AI",
         "preview": "Preview",
         "copyPrompt": "Copy prompt",
@@ -71,7 +89,6 @@
           "image": "What kind of picture do you want?",
           "video": "What kind of video do you want?"
         },
-        "aspectRatio": "Frame",
         "references": "References",
         "referencesHint": "Upload media, choose project media, or drag a canvas card here.",
         "referenceRoleLabel": "Reference role",
@@ -92,6 +109,7 @@
           "imageIntro": "Please generate one image on the canvas. My brief: {brief}",
           "videoIntro": "Please generate one video on the canvas. My brief: {brief}",
           "aspectRatio": "Frame: {ratio}",
+          "projectAspectRatio": "Inherit project frame: {ratio}; omit the per-item frame override when generating.",
           "videoDuration": "Video duration: {seconds} seconds.",
           "folder": "Save into folder: {path}",
           "folderRoot": "Save into the project root.",
@@ -123,15 +141,21 @@
         "durationSeconds": "{seconds} seconds",
         "reviewConfiguration": "Use current configuration",
         "adaptiveFrame": "Frame follows the first image",
+        "projectAspectRatio": "Using project frame {ratio}",
         "pricingLimited": "Only resolutions and reference modes with available quotes are offered.",
         "validation": {
           "MODEL_UNAVAILABLE": "Model capabilities are unavailable. Check settings or try again.",
           "MODEL_CONFIGURATION_UNAVAILABLE": "The fixed model parameters have no available generation plan. Update model settings.",
           "CONFIGURATION_CHANGED": "Model settings changed. Review the choices and use the current configuration.",
-          "ASPECT_RATIO_REQUIRED": "Select a frame supported by the current model.",
+          "ASPECT_RATIO_REQUIRED": "The project frame is unset or unsupported by this model. Adjust it in the Characters / Locations / Props card, or choose a model that supports it.",
           "DURATION_REQUIRED": "Select a video duration.",
           "PARAMETERS_REQUIRED": "Choose valid resolution, quality or audio options in Advanced.",
           "IMAGE_REFERENCE_ROLE_INVALID": "Image generation accepts reference images and context files.",
+          "IMAGE_MODEL_REFERENCE_UNSUPPORTED": "This model does not support image references. Choose a compatible model or explicitly use text-only generation.",
+          "IMAGE_MODEL_REFERENCE_CAPABILITY_UNKNOWN": "Image-reference support is unknown for this model. Choose a model with a declared reference capability.",
+          "IMAGE_REFERENCE_PLAN_REQUIRED": "Confirm the shot reference recipe before generating.",
+          "IMAGE_REFERENCE_PLAN_CONFLICT": "The recipe conflicts with the selected references. Check order, purpose and versions.",
+          "IMAGE_REFERENCE_DUPLICATE": "The same image version cannot be attached twice.",
           "IMAGE_MODEL_REFERENCE_LIMIT_EXCEEDED": "Too many reference images for this model. Remove extra images.",
           "VIDEO_REFERENCE_ROLE_INVALID": "A reference type and role do not match. Remove it and add it again.",
           "VIDEO_MODEL_INPUT_MODE_UNSUPPORTED": "This reference mode is unavailable for the model or environment. Remove or change the references.",
@@ -150,15 +174,37 @@
           "VIDEO_MODEL_REFERENCE_VIDEO_TOO_SHORT": "A reference is too short for the current model.",
           "VIDEO_MODEL_REFERENCE_VIDEO_TOO_LONG": "A reference is too long for the current model.",
           "VIDEO_MODEL_REFERENCE_VIDEO_TOTAL_DURATION_TOO_SHORT": "The total reference duration is too short for the current model.",
-          "VIDEO_MODEL_REFERENCE_VIDEO_TOTAL_DURATION_EXCEEDED": "The total reference duration exceeds the model limit. Remove some references."
+          "VIDEO_MODEL_REFERENCE_VIDEO_TOTAL_DURATION_EXCEEDED": "The total reference duration exceeds the model limit. Remove some references.",
+          "VIDEO_MODEL_REFERENCE_VIDEO_OUTPUT_DURATION_UNKNOWN": "Select an output duration to validate the combined reference and output video duration.",
+          "VIDEO_MODEL_REFERENCE_VIDEO_INPUT_AND_OUTPUT_DURATION_EXCEEDED": "The combined reference and output video duration exceeds the model limit. Shorten the output or remove some reference videos."
         },
         "referenceLimits": {
+          "imageUnknown": "Image-reference support is unknown for this model. Use text-only generation or choose a model with declared support.",
+          "imageUnsupported": "This model cannot use image references. Text-only generation may reduce character consistency.",
+          "changeModel": "Change image model",
+          "modelImage": "The model supports up to {count} images; this entry also has an attachment limit.",
           "image": "This action accepts up to {count} reference images.",
           "video": "Reference mode: up to {images} images, {audios} audio files and {videos} videos; {total} files total.",
           "frames": "Frame mode cannot be mixed with other references; a last frame requires a first frame.",
           "firstFrameOnly": "This model accepts one first-frame image here, not a first/last-frame pair.",
           "audioDuration": "Reference audio: {minimum}–{maximum} seconds each, up to {total} seconds total.",
           "videoDuration": "Reference video: {minimum}–{maximum} seconds each, up to {total} seconds total."
+        },
+        "selectedReferenceCount": "{count}/{limit} image references selected. You can select multiple assets.",
+        "moveReferenceUp": "Move reference earlier",
+        "moveReferenceDown": "Move reference later",
+        "referencePurpose": {
+          "identity": "Identity",
+          "scene": "Scene",
+          "continuity": "Continuity",
+          "prop": "Prop",
+          "style": "Style"
+        },
+        "referenceResult": {
+          "images": "The generation records {count} image references. Submission status was not recorded for this older task.",
+          "textOnly": "No image references are recorded. Submission status was not recorded for this older task.",
+          "submittedImages": "This generation submitted {count} image references. Check sources and versions below.",
+          "submittedTextOnly": "No image references were submitted. Identity and style depend on the text prompt."
         },
         "uploadReference": "Upload media",
         "chooseProjectReference": "Choose project media",
@@ -183,6 +229,7 @@
         }
       },
       "status": {
+        "disabled": "Disabled",
         "pending": "Pending",
         "queued": "Queued",
         "processing": "Processing",
@@ -217,10 +264,12 @@
         "empty": "No generation details",
         "editor": {
           "newName": "New resource name",
+          "newVersionName": "{name} (new {time})",
           "newNameHint": "Enter a different name for the new version",
+          "newNameRequired": "Enter a new resource name to generate. The original will be kept.",
           "differentNameRequired": "The original resource will be kept. Use a different name for this version.",
           "promptPlaceholder": "Describe what to generate…",
-          "aspectRatio": "Frame",
+          "projectAspectRatio": "Using project frame {ratio}",
           "duration": "Duration (s)",
           "hint": "“Run again” creates a new card with your edits; this result stays.Drag a card from the canvas here to add it as a reference.",
           "removeReference": "Remove reference {name}",
@@ -228,7 +277,8 @@
           "dropActive": "Release to add this card as a reference.",
           "removeAddedReference": "Remove this reference",
           "modelMissing": "No matching model is configured for this project, so it cannot run again."
-        }
+        },
+        "videoNeedsReview": "The video is saved. Some requested specifications differ or could not be verified. Review it before continuing."
       },
       "scriptWorkbench": {
         "eyebrow": "Script workbench",
@@ -293,12 +343,6 @@
         }
       },
       "stages": {
-        "label": "Production stages",
-        "phases": {
-          "pre": "Pre-production",
-          "production": "Production",
-          "post": "Post-production"
-        },
         "stepStatus": {
           "blocked": "Missing prerequisites",
           "empty": "Not started",
@@ -314,7 +358,7 @@
         "review": "Ask the assistant to review this step",
         "listSeparator": ", ",
         "script": "Script",
-        "direction": "Creative direction",
+        "direction": "Direction",
         "assets": "Characters / locations / props",
         "storyboard": "Storyboard",
         "video": "Video",
@@ -327,22 +371,16 @@
           "failed": "Has failures"
         },
         "count": "{ready}/{total}",
-        "emptyHint": "No content at this stage yet",
         "start": "Ask the assistant to start this stage",
         "openScript": "Open script workbench",
         "locate": "Locate on canvas",
-        "more": "{count} more items on the canvas",
         "content": {
-          "viewStep": "Current step",
-          "viewFiles": "All files",
-          "viewStepHint": "Show only this step's artifacts",
-          "viewFilesHint": "Browse the project's full folder tree",
           "folder": "Folder: {path}",
           "episode": "Episode {number}",
           "unassigned": "Unassigned",
           "groupEmpty": "No artifacts in this group yet",
           "empty": "This step has no artifacts yet",
-          "emptyHint": "Ask the assistant to start this step, or add files in All files.",
+          "emptyHint": "Ask the assistant to start this step, or add files in Content.",
           "loading": "Loading…",
           "loadFailed": "Failed to load step artifacts",
           "retry": "Retry",
@@ -387,7 +425,11 @@
         "deleteFolder": "Delete folder {path}",
         "sectionCount": "{count} items",
         "directory": "Content",
+        "allContent": "All content",
+        "viewAll": "View all content",
+        "viewStepOnly": "Current step only",
         "directoryEmpty": "No project files yet",
+        "scopeEmpty": "This step has no content yet",
         "jumpToFolder": "Jump to canvas position",
         "locateFile": "Locate file on canvas"
       },

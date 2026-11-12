@@ -22,6 +22,7 @@ import {
   buildWaoMcpUserDecisionElicitation,
   parseWaoMcpUserDecisionInput,
   projectWaoMcpUserDecisionResult,
+  WaoMcpUserDecisionInputError,
 } from './user-decision'
 
 // MCP server-to-client requests have their own 60 second SDK default, separate
@@ -186,14 +187,11 @@ export function createWaoMcpServer(
       } catch (error) {
         extra.signal.throwIfAborted()
         if (entry.kind === 'user_decision') {
-          const code = error instanceof Error
-            && error.message === 'WAO_MCP_USER_DECISION_INPUT_INVALID'
-            ? error.message
-            : 'WAO_MCP_USER_DECISION_FAILED'
+          const inputError = error instanceof WaoMcpUserDecisionInputError ? error : null
           return errorResult(
-            code,
-            code === 'WAO_MCP_USER_DECISION_INPUT_INVALID'
-              ? 'The user decision request is invalid. Correct its fields and call the tool again.'
+            inputError?.message ?? 'WAO_MCP_USER_DECISION_FAILED',
+            inputError
+              ? `The user decision request is invalid. ${inputError.details} Pass header, question, and optional otherLabel as separate top-level fields; pass options as an array of 2-4 objects with unique ids and labels. Correct the reported fields and call the tool again.`
               : 'The user decision could not be completed.',
           )
         }

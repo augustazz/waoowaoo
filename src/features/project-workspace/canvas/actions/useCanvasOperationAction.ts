@@ -10,12 +10,13 @@ import {
   fetchOperationPlanView,
   issueOperationApprovalGrant,
 } from '@/lib/query/operation-plan-client'
+import { requestJsonWithError } from '@/lib/query/mutations/mutation-shared'
 import { queryKeys } from '@/lib/query/keys'
 
 export interface CanvasOperationRequest {
   readonly operationId: string
   readonly input: Readonly<Record<string, unknown>>
-  readonly confirmation: 'billable_media'
+  readonly confirmation: 'billable_media' | 'none'
   /** Runs after the approved plan executed; `output` is the Operation's acknowledged result. */
   readonly onAccepted?: (result: { readonly plan: OperationPlanView; readonly output: unknown }) => void
 }
@@ -44,6 +45,24 @@ export function useCanvasOperationAction(params: {
     busyRef.current = true
     const operationRequestId = crypto.randomUUID()
     try {
+      if (request.confirmation === 'none') {
+        setPhase('executing')
+        const candidate = request.input.request
+        const target = candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+          ? candidate as Readonly<Record<string, unknown>> : null
+        if (request.operationId !== 'merge_videos' || !target
+          || target.kind !== 'retry' || typeof target.resourceId !== 'string'
+          || typeof target.expectedTaskId !== 'string') throw new Error('CANVAS_MERGE_RETRY_INPUT_INVALID')
+        await requestJsonWithError(
+          `/api/projects/${encodeURIComponent(params.projectId)}/resources/${encodeURIComponent(target.resourceId)}/retry`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': operationRequestId },
+            body: JSON.stringify({ expectedTaskId: target.expectedTaskId }) },
+        )
+        await queryClient.invalidateQueries({ queryKey: queryKeys.project.workspaceResourcesAll(params.projectId) })
+        setPhase('idle')
+        busyRef.current = false
+        return
+      }
       setPhase('planning')
       const plan = await fetchOperationPlanView({
         projectId: params.projectId,
@@ -60,7 +79,7 @@ export function useCanvasOperationAction(params: {
       busyRef.current = false
       showError(error, t('failed'))
     }
-  }, [context, params.projectId, phase, showError, t])
+  }, [context, params.projectId, phase, queryClient, showError, t])
 
   const confirm = useCallback(async () => {
     if (!pending || phase !== 'confirming') return

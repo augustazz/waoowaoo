@@ -2,8 +2,6 @@
   "title": "今天想做点什么",
   "subtitle": "一句话就够，剩下的它来办……",
   "inputPlaceholder": "比如：一个外卖员捡到一部会说话的手机……",
-  "aspectRatio": "画面比例",
-  "aspectRatioCurrent": "画面比例：{ratio}",
   "defaultProjectName": "新项目 {timestamp}",
   "createFailed": "项目创建失败，请稍后重试",
   "projectsLoadFailed": "最近项目加载失败，请重试",

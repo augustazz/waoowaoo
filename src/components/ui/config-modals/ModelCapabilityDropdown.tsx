@@ -25,6 +25,7 @@ import {
 // ─── Types ────────────────────────────────────────────
 
 export interface ModelCapabilityOption {
+    note?: string
     /** Composite model key, e.g. "provider::model-id" */
     value: string
     /** Display name */
@@ -384,6 +385,7 @@ export function ModelCapabilityDropdown({
                                                 onModelChange(m.value)
                                             }}
                                             disabled={m.disabled}
+                                            title={m.note}
                                             className={`w-full text-left px-4 py-2 transition-all border-l-[3px] ${value === m.value
                                                 ? 'border-[var(--glass-tone-info-fg)] bg-[var(--glass-bg-surface-strong)] font-bold'
                                                 : m.disabled
@@ -397,6 +399,7 @@ export function ModelCapabilityDropdown({
                                             }>
                                                 {m.label}
                                             </span>
+                                            {m.note && <span className="block text-[11px] font-normal text-[var(--glass-text-tertiary)]">{m.note}</span>}
                                         </button>
                                     ))}
                                 </div>

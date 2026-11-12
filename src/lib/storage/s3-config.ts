@@ -1,5 +1,5 @@
 import type { S3ClientConfig } from '@aws-sdk/client-s3'
-import { getDeploymentConfig, type MediaObjectDelivery } from '@/lib/deployment/config'
+import { getDeploymentConfig, type MediaObjectDelivery, type ProviderMediaInputTransport } from '@/lib/deployment/config'
 import { StorageConfigError } from '@/lib/storage/errors'
 import {
   getStorageSettingsState,
@@ -16,6 +16,7 @@ export type S3StorageConfig = {
   readonly bucket: string
   readonly forcePathStyle: boolean
   readonly mediaObjectDelivery: MediaObjectDelivery
+  readonly providerMediaInputTransport?: ProviderMediaInputTransport
   readonly credentials: {
     readonly accessKeyId: string
     readonly secretAccessKey: string
@@ -61,18 +62,21 @@ function parseEndpoint(
 export function toS3StorageConfig(
   settings: StorageRuntimeSettings,
   mediaObjectDelivery: MediaObjectDelivery,
+  providerMediaInputTransport: ProviderMediaInputTransport = mediaObjectDelivery === 'signed-https' ? 'public-https' : 'inline-data-url',
 ): S3StorageConfig {
+  const endpointPolicy = providerMediaInputTransport === 'public-https' ? 'signed-https' : mediaObjectDelivery
   return {
-    endpoint: parseEndpoint('S3_ENDPOINT', settings.endpoint, mediaObjectDelivery),
+    endpoint: parseEndpoint('S3_ENDPOINT', settings.endpoint, endpointPolicy),
     uploadEndpoint: parseEndpoint(
       'S3_UPLOAD_ENDPOINT',
       settings.uploadEndpoint,
-      mediaObjectDelivery,
+      endpointPolicy,
     ),
     region: settings.region || DEFAULT_S3_REGION,
     bucket: settings.bucket,
     forcePathStyle: settings.forcePathStyle,
     mediaObjectDelivery,
+    providerMediaInputTransport,
     credentials: {
       accessKeyId: settings.accessKeyId,
       secretAccessKey: settings.secretAccessKey,
@@ -107,14 +111,14 @@ export function buildS3StorageConfigFromInput(input: {
 }
 
 export function loadS3StorageConfig(): S3StorageConfig {
-  const { mediaObjectDelivery } = getDeploymentConfig()
+  const { mediaObjectDelivery, providerMediaInputTransport } = getDeploymentConfig()
   const state = getStorageSettingsState()
   if (!state.configured || !state.settings) {
     throw new StorageConfigError(
       'S3 storage is not configured. Set it in the admin settings page or provide S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY.',
     )
   }
-  return toS3StorageConfig(state.settings, mediaObjectDelivery)
+  return toS3StorageConfig(state.settings, mediaObjectDelivery, providerMediaInputTransport)
 }
 
 export function toS3ClientConfig(config: S3StorageConfig, endpoint: string): S3ClientConfig {

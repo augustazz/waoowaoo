@@ -106,8 +106,8 @@ function resolvedFrameAspect(input: {
   const assetAspect = assetKind
     ? parseFrameAspect(getAssetImageFormatPolicy(assetKind).aspectRatio)
     : null
-  return assetAspect
-    ?? parseFrameAspect(input.projectAspectRatio)
+  return parseFrameAspect(input.projectAspectRatio)
+    ?? assetAspect
     ?? DEFAULT_FRAME_ASPECT
 }
 

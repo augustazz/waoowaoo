@@ -13,6 +13,7 @@ import {
 import {
   PRODUCTION_EPISODE_FOLDER_PATHS,
   productionStageDefinition,
+  productionStageFolderPaths,
   productionStageForResource,
   type ProductionStageKey,
 } from './production-stages'
@@ -41,7 +42,6 @@ export async function readProductionStepContent(input: {
   readonly stepKey: ProductionStageKey
 }): Promise<ProductionStepContentView> {
   const definition = productionStageDefinition(input.stepKey)
-  const folderPrefix = `${definition.defaultFolderPath}/`
   const baseWhere = {
     userId: input.userId,
     projectId: input.projectId,
@@ -57,7 +57,9 @@ export async function readProductionStepContent(input: {
         ...baseWhere,
         OR: [
           { schemaId: { in: [...definition.schemaIds] } },
-          { workspacePath: { startsWith: folderPrefix } },
+          ...productionStageFolderPaths(input.stepKey).map((folderPath) => ({
+            workspacePath: { startsWith: `${folderPath}/` },
+          })),
         ],
       },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
@@ -67,6 +69,7 @@ export async function readProductionStepContent(input: {
         name: true,
         workspacePath: true,
         status: true,
+        workflowEnabled: true,
         schemaId: true,
         mediaType: true,
         currentVersion: true,

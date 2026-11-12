@@ -4,7 +4,11 @@ import {
   defaultProductionFolderPathForSchemaId,
   PRODUCTION_STAGE_DEFINITIONS,
   PRODUCTION_STAGE_KEYS,
+  PRODUCTION_STAGE_FOLDER_PATHS,
+  PRODUCTION_EPISODE_FOLDER_PATHS,
   productionStageDefinition,
+  productionStageFolderPaths,
+  productionStageForFolderPath,
   productionStageForResource,
   productionStageForWorkspacePath,
   resolveProductionFolderPath,
@@ -140,7 +144,7 @@ describe('production step registry', () => {
     ])
     expect(folders).toEqual([
       ['script', '剧本', 'episode'],
-      ['direction', '创作方向', 'episode'],
+      ['direction', '方向', 'episode'],
       ['assets', '资产', 'asset_type'],
       ['storyboard', '分镜', 'episode'],
       ['video', '视频', 'episode'],
@@ -152,6 +156,8 @@ describe('production step registry', () => {
   it('resolves placement folders, including asset type subfolders', () => {
     expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.SCREENPLAY))
       .toBe('剧本')
+    expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.CREATIVE_DIRECTION))
+      .toBe('方向')
     expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.CHARACTER_IMAGE))
       .toBe('资产/角色')
     expect(defaultProductionFolderPathForSchemaId(WORKSPACE_RESOURCE_SCHEMA.LOCATION_IMAGE))
@@ -175,6 +181,26 @@ describe('production step registry', () => {
 })
 
 describe('productionStepForResource ownership', () => {
+  it('combines direction folders while keeping the original name for new content', () => {
+    expect(productionStageFolderPaths('direction')).toEqual(['方向', '创作方向'])
+    for (const path of ['方向', '创作方向']) {
+      expect(PRODUCTION_STAGE_FOLDER_PATHS).toContain(path)
+      expect(PRODUCTION_EPISODE_FOLDER_PATHS).toContain(path)
+      expect(productionStageForFolderPath(path)).toBe('direction')
+      expect(productionStageForResource({
+        workspacePath: `${path}/参考/风格.png`,
+        schemaId: WORKSPACE_RESOURCE_SCHEMA.GENERIC_IMAGE,
+      })).toBe('direction')
+    }
+    expect(productionStageForWorkspacePath('方向参考/风格.png')).toBeNull()
+    const direction = summarizeProductionStages([
+      row('original', WORKSPACE_RESOURCE_SCHEMA.GENERIC_TEXT, 'ready', '方向/总纲.txt'),
+      row('alias', WORKSPACE_RESOURCE_SCHEMA.GENERIC_TEXT, 'ready', '创作方向/风格.txt'),
+    ]).filter((stage) => stage.key === 'direction')
+    expect(direction).toHaveLength(1)
+    expect(direction[0]).toMatchObject({ defaultFolderPath: '方向', counts: { total: 2 } })
+  })
+
   it('prefers the step folder over a conflicting schema', () => {
     expect(productionStageForResource({
       workspacePath: '剧本/第01集.json',
@@ -201,6 +227,15 @@ describe('productionStepForResource ownership', () => {
     expect(productionStageForWorkspacePath('剧本')).toBeNull()
     expect(productionStageForWorkspacePath('剧本/第01集.json')).toBe('script')
     expect(productionStageForWorkspacePath('资产/角色/主角.png')).toBe('assets')
+  })
+
+  it('resolves the step for the step folder itself and its descendants', () => {
+    expect(productionStageForFolderPath('剧本')).toBe('script')
+    expect(productionStageForFolderPath('剧本/')).toBe('script')
+    expect(productionStageForFolderPath('剧本/第01集')).toBe('script')
+    expect(productionStageForFolderPath('资产/角色')).toBe('assets')
+    expect(productionStageForFolderPath('画面素材')).toBeNull()
+    expect(productionStageForFolderPath('')).toBeNull()
   })
 })
 

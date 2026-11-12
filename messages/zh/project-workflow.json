@@ -1,6 +1,18 @@
 {
   "canvas": {
     "workspace": {
+      "projectAspectRatio": {
+        "label": "项目画幅",
+        "current": "项目画幅：{ratio}",
+        "unset": "未设置",
+        "portrait": "竖屏",
+        "landscape": "横屏",
+        "square": "方形",
+        "description": "所有新图片、分镜和视频统一使用此项目画幅。手机竖屏视频推荐 9:16。",
+        "existingUnchanged": "修改只影响后续生成，已有图片和视频保留原比例，不会自动重新生成。",
+        "saved": "项目画幅已更新",
+        "saveFailed": "项目画幅保存失败，请重试。"
+      },
       "toolbar": {
         "fitView": "适应画布",
         "zoomIn": "放大",
@@ -9,6 +21,12 @@
         "arrangeFailed": "布局保存失败，请重试。"
       },
       "actions": {
+        "disableWorkflow": "停用",
+        "restoreWorkflow": "恢复使用",
+        "workflowDisabled": "已停用，仍可查看和对比",
+        "workflowRestored": "已恢复使用",
+        "workflowUpdateFailed": "更新资源使用状态失败",
+        "workflowDisabledHint": "已停用：保留供查看和对比，不参与后续生成和步骤完成统计。",
         "discuss": "和 AI 讨论",
         "preview": "预览",
         "copyPrompt": "复制提示词",
@@ -71,7 +89,6 @@
           "image": "你想要一张什么样的画面？",
           "video": "你想要一段什么样的视频？"
         },
-        "aspectRatio": "画幅",
         "references": "参考素材",
         "referencesHint": "上传素材、选择项目素材，或将画布卡片拖到这里。",
         "referenceRoleLabel": "参考用途",
@@ -92,6 +109,7 @@
           "imageIntro": "请在画布上生成一张图片。我的要求：{brief}",
           "videoIntro": "请在画布上生成一段视频。我的要求：{brief}",
           "aspectRatio": "画幅：{ratio}",
+          "projectAspectRatio": "继承项目画幅：{ratio}；生成时省略单张画幅覆盖。",
           "videoDuration": "视频时长：{seconds} 秒。",
           "folder": "保存到文件夹：{path}",
           "folderRoot": "保存到项目根目录。",
@@ -123,15 +141,21 @@
         "durationSeconds": "{seconds} 秒",
         "reviewConfiguration": "使用当前配置",
         "adaptiveFrame": "画幅跟随首帧",
+        "projectAspectRatio": "使用项目画幅 {ratio}",
         "pricingLimited": "仅提供目前支持报价的分辨率和参考模式。",
         "validation": {
           "MODEL_UNAVAILABLE": "当前模型能力不可用，请检查配置或稍后重试。",
           "MODEL_CONFIGURATION_UNAVAILABLE": "当前固定参数没有可用的生成方案，请在模型设置中重新选择。",
           "CONFIGURATION_CHANGED": "模型配置已改变，请检查下面的选项后使用当前配置。",
-          "ASPECT_RATIO_REQUIRED": "请选择当前模型支持的画幅。",
+          "ASPECT_RATIO_REQUIRED": "项目画幅未设置或当前模型不支持。请在“角色 / 场景 / 道具”卡片调整项目画幅，或更换支持该画幅的模型。",
           "DURATION_REQUIRED": "请选择视频时长。",
           "PARAMETERS_REQUIRED": "请在高级参数中选择有效的分辨率、画质或音频选项。",
           "IMAGE_REFERENCE_ROLE_INVALID": "图片生成只支持参考图片和上下文文件。",
+          "IMAGE_MODEL_REFERENCE_UNSUPPORTED": "当前模型不支持参考图，请更换支持参考图的模型，或明确使用文字描述生成。",
+          "IMAGE_MODEL_REFERENCE_CAPABILITY_UNKNOWN": "当前模型的参考图能力尚未确认，请使用已声明支持参考图的模型。",
+          "IMAGE_REFERENCE_PLAN_REQUIRED": "请先确认此镜头的参考图配方，再生成图片。",
+          "IMAGE_REFERENCE_PLAN_CONFLICT": "参考图配方与本次引用不一致，请核对顺序、用途和版本。",
+          "IMAGE_REFERENCE_DUPLICATE": "同一版本的参考图不能重复添加。",
           "IMAGE_MODEL_REFERENCE_LIMIT_EXCEEDED": "参考图片超过当前模型上限，请移除多余图片。",
           "VIDEO_REFERENCE_ROLE_INVALID": "参考素材的类型和角色不匹配，请重新添加。",
           "VIDEO_MODEL_INPUT_MODE_UNSUPPORTED": "当前模型或运行环境不支持这组参考素材，请移除或重新选择。",
@@ -150,15 +174,37 @@
           "VIDEO_MODEL_REFERENCE_VIDEO_TOO_SHORT": "参考素材太短，不符合当前模型要求。",
           "VIDEO_MODEL_REFERENCE_VIDEO_TOO_LONG": "参考素材太长，不符合当前模型要求。",
           "VIDEO_MODEL_REFERENCE_VIDEO_TOTAL_DURATION_TOO_SHORT": "参考素材总时长不足，不符合当前模型要求。",
-          "VIDEO_MODEL_REFERENCE_VIDEO_TOTAL_DURATION_EXCEEDED": "参考素材总时长超过当前模型上限，请移除部分素材。"
+          "VIDEO_MODEL_REFERENCE_VIDEO_TOTAL_DURATION_EXCEEDED": "参考素材总时长超过当前模型上限，请移除部分素材。",
+          "VIDEO_MODEL_REFERENCE_VIDEO_OUTPUT_DURATION_UNKNOWN": "请先选择视频生成时长，以校验参考视频与输出的总时长。",
+          "VIDEO_MODEL_REFERENCE_VIDEO_INPUT_AND_OUTPUT_DURATION_EXCEEDED": "参考视频与输出视频的总时长超过模型上限，请缩短生成时长或移除部分参考视频。"
         },
         "referenceLimits": {
+          "imageUnknown": "当前模型的参考图能力尚未确认，本次请使用文字描述或更换已支持的模型。",
+          "imageUnsupported": "当前模型不支持参考图；本次只能依赖文字描述，人物一致性可能降低。",
+          "changeModel": "更换图片模型",
+          "modelImage": "当前模型支持最多 {count} 张；此入口另受附件数量限制。",
           "image": "此入口最多可用 {count} 张参考图。",
           "video": "参考模式：图片最多 {images} 张，音频 {audios} 个，视频 {videos} 个，合计最多 {total} 个。",
           "frames": "首尾帧模式与普通参考模式互斥；尾帧需搭配首帧。",
           "firstFrameOnly": "此模型在这里仅支持一张首帧图片，不支持首尾帧组合。",
           "audioDuration": "参考音频：每段 {minimum}–{maximum} 秒，总计最多 {total} 秒。",
           "videoDuration": "参考视频：每段 {minimum}–{maximum} 秒，总计最多 {total} 秒。"
+        },
+        "selectedReferenceCount": "已选 {count}/{limit} 张参考图，可连续选择多张。",
+        "moveReferenceUp": "前移参考图",
+        "moveReferenceDown": "后移参考图",
+        "referencePurpose": {
+          "identity": "人物身份",
+          "scene": "场景结构",
+          "continuity": "镜头连续性",
+          "prop": "道具",
+          "style": "风格"
+        },
+        "referenceResult": {
+          "images": "生成记录包含 {count} 张参考图；历史任务未记录实际提交状态。",
+          "textOnly": "生成记录中没有参考图；历史任务未记录实际提交状态。",
+          "submittedImages": "本次生成已提交 {count} 张参考图；可在下方核对来源和版本。",
+          "submittedTextOnly": "本次生成未提交参考图，人物与风格依赖文字描述。"
         },
         "uploadReference": "上传素材",
         "chooseProjectReference": "选择项目素材",
@@ -183,6 +229,7 @@
         }
       },
       "status": {
+        "disabled": "已停用",
         "pending": "待处理",
         "queued": "已排队",
         "processing": "处理中",
@@ -217,10 +264,12 @@
         "empty": "暂无生成信息",
         "editor": {
           "newName": "新素材名称",
+          "newVersionName": "{name}（新版 {time}）",
           "newNameHint": "为新版本填写不同的名称",
+          "newNameRequired": "填写新素材名称后即可生成，原素材会保留。",
           "differentNameRequired": "新版本会保留原素材，请使用不同的名称。",
           "promptPlaceholder": "描述要生成的画面…",
-          "aspectRatio": "画幅",
+          "projectAspectRatio": "使用项目画幅 {ratio}",
           "duration": "时长（秒）",
           "hint": "修改后点“再来一版”会生成一张新卡片，当前结果保留。把画布上的卡片拖到这里可以加入参考。",
           "removeReference": "移除参考 {name}",
@@ -228,7 +277,8 @@
           "dropActive": "松开即可把这张卡片加入参考。",
           "removeAddedReference": "移除这个参考",
           "modelMissing": "项目还没有配置对应模型，无法再来一版。"
-        }
+        },
+        "videoNeedsReview": "视频已生成并保留，部分规格不符合请求或缺少验证依据，请先验收再继续。"
       },
       "scriptWorkbench": {
         "eyebrow": "剧本工作台",
@@ -293,12 +343,6 @@
         }
       },
       "stages": {
-        "label": "生产阶段",
-        "phases": {
-          "pre": "前期",
-          "production": "制作",
-          "post": "后期"
-        },
         "stepStatus": {
           "blocked": "缺少前置",
           "empty": "未开始",
@@ -314,7 +358,7 @@
         "review": "让助手检查这一步",
         "listSeparator": "、",
         "script": "剧本",
-        "direction": "创作方向",
+        "direction": "方向",
         "assets": "角色 / 场景 / 道具",
         "storyboard": "分镜",
         "video": "视频",
@@ -327,22 +371,16 @@
           "failed": "有失败"
         },
         "count": "{ready}/{total}",
-        "emptyHint": "这一步还没有内容",
         "start": "让助手开始这一步",
         "openScript": "打开剧本工作台",
         "locate": "定位到画布",
-        "more": "还有 {count} 项，去画布查看",
         "content": {
-          "viewStep": "当前步骤",
-          "viewFiles": "全部文件",
-          "viewStepHint": "只看这一步的产物",
-          "viewFilesHint": "查看项目的全部目录和文件",
           "folder": "目录：{path}",
           "episode": "第 {number} 集",
           "unassigned": "未分集",
           "groupEmpty": "这一组还没有产物",
           "empty": "这一步还没有产物",
-          "emptyHint": "让助手开始这一步，或在全部文件中直接添加。",
+          "emptyHint": "让助手开始这一步，或在内容管理中直接添加。",
           "loading": "加载中…",
           "loadFailed": "步骤产物加载失败",
           "retry": "重试",
@@ -387,7 +425,11 @@
         "deleteFolder": "删除文件夹 {path}",
         "sectionCount": "{count} 项",
         "directory": "内容管理",
+        "allContent": "全部内容",
+        "viewAll": "查看全部内容",
+        "viewStepOnly": "只看当前步骤",
         "directoryEmpty": "暂无项目文件",
+        "scopeEmpty": "当前步骤还没有内容",
         "jumpToFolder": "跳转到画布位置",
         "locateFile": "定位到画布文件"
       },

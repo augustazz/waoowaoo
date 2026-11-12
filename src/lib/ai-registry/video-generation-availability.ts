@@ -13,7 +13,7 @@ export function projectVideoGenerationAvailability(input: {
 }): { readonly video: VideoCapabilities; readonly pricingLimited: boolean } {
   const { video, modelKey, aspectRatios } = input
   const durations = (video.durationOptions ?? []).filter((duration) => duration > 0)
-  const audioOptions: readonly (boolean | undefined)[] = video.generateAudioOptions ?? [undefined]
+  const audioOptions: readonly (boolean | undefined)[] = video.generateAudioOptions?.length ? video.generateAudioOptions : [undefined]
   const nativeResolutions = video.resolutionOptions ?? []
   const nativeModes = video.supportedInputModes ?? []
   const imageCounts = (mode: VideoInputMode): readonly number[] => {

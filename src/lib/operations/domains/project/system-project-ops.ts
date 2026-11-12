@@ -15,10 +15,8 @@ import {
   type ProjectAgentOperationRegistryDraft,
 } from '@/lib/operations/types'
 import { defineOperation } from '@/lib/operations/define-operation'
-import {
-  isProjectVideoRatio,
-  writeProjectVideoRatioInTransaction,
-} from '@/lib/projects/video-ratio-write'
+import { isProjectVideoRatio } from '@/lib/projects/video-ratio-write'
+import { resolveProjectVideoRatio } from '@/lib/projects/video-ratio'
 
 function readProjectDraftBody(body: unknown): ProjectDraftInput {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -211,26 +209,18 @@ export function createSystemProjectOperations(): ProjectAgentOperationRegistryDr
               select: { videoResolution: true, imageResolution: true },
             })
 
-        let project = await transaction.project.create({
+        const project = await transaction.project.create({
           data: {
             name: normalized.name.trim(),
             description: normalized.description?.trim() || null,
             userId: ctx.userId,
-            videoRatio: null,
+            videoRatio: resolveProjectVideoRatio(input.videoRatio),
             ...(userPreference && {
               videoResolution: userPreference.videoResolution,
               imageResolution: userPreference.imageResolution,
             }),
           },
         })
-
-        if (input.videoRatio !== undefined) {
-          project = await writeProjectVideoRatioInTransaction({
-            transaction,
-            projectId: project.id,
-            videoRatio: input.videoRatio,
-          })
-        }
 
         return { project }
       },

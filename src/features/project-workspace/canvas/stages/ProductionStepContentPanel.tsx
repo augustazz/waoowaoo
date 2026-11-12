@@ -14,6 +14,7 @@ import type {
   ProductionStepStatus,
 } from '@/lib/workspace-resource/production-stages'
 import { workspaceCanvasScrollableRegionProps } from '../canvas-scroll-lock'
+import { ProjectAspectRatioControl } from '../controls/ProjectAspectRatioControl'
 
 const ASSET_TYPE_ICONS: Record<ProductionAssetTypeKey, AppIconName> = {
   character: 'user',
@@ -83,7 +84,8 @@ function ContentItemRow({
   return (
     <button
       type="button"
-      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-slate-50"
+      className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-slate-50 ${item.workflowEnabled === false ? 'opacity-60' : ''}`}
+      data-workflow-enabled={item.workflowEnabled !== false}
       onClick={onAction}
     >
       <ItemThumb item={item} />
@@ -91,11 +93,11 @@ function ContentItemRow({
         <span className="block truncate text-[13px] font-semibold text-slate-800">{item.name}</span>
         <span className="mt-0.5 block truncate text-[11px] text-slate-400">{item.workspacePath}</span>
       </span>
-      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${resourceChipClass(item.status)}`}>
-        {statusLabel(item.status === 'ready' ? 'succeeded' : item.status)}
+      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${item.workflowEnabled === false ? 'bg-slate-100 text-slate-500 ring-slate-200' : resourceChipClass(item.status)}`}>
+        {statusLabel(item.workflowEnabled === false ? 'disabled' : item.status === 'ready' ? 'succeeded' : item.status)}
       </span>
       <span className="shrink-0 text-[11px] font-semibold text-slate-500">{actionLabel}</span>
-      <span className={`h-2 w-2 shrink-0 rounded-full ${resourceDotClass(item.status)}`} />
+      <span className={`h-2 w-2 shrink-0 rounded-full ${item.workflowEnabled === false ? 'bg-slate-300' : resourceDotClass(item.status)}`} />
     </button>
   )
 }
@@ -163,6 +165,7 @@ export function ProductionStepContentPanel({
   onOpenResourcePath,
   onStart,
   onReview,
+  embedded = false,
 }: {
   readonly projectId: string
   readonly stage: ProductionStageView
@@ -170,6 +173,8 @@ export function ProductionStepContentPanel({
   readonly onOpenResourcePath: (workspacePath: string) => void
   readonly onStart: () => void
   readonly onReview: () => void
+  /** Renders without the floating card chrome when mounted inside Content. */
+  readonly embedded?: boolean
 }) {
   const t = useTranslations('projectWorkflow.canvas.workspace.stages')
   const contentQuery = useProductionStepContent(projectId, stage.key)
@@ -179,13 +184,20 @@ export function ProductionStepContentPanel({
   const listSteps = (keys: readonly ProductionStageView['key'][]) => (
     keys.map((key) => t(key)).join(t('listSeparator'))
   )
+  // Locate the step's actual first artifact. Legacy resources can live outside
+  // the canonical folder, so the folder path alone may not resolve.
+  const locatePath = groups.flatMap((group) => group.items)[0]?.workspacePath ?? null
 
   return (
     <div
-      className="pointer-events-auto flex max-h-[calc(100vh-9rem)] w-[min(94%,380px)] flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/96 shadow-[0_18px_48px_rgba(15,23,42,0.16)] backdrop-blur-xl"
+      className={
+        embedded
+          ? 'flex min-h-0 max-h-full w-full flex-1 flex-col overflow-hidden'
+          : 'pointer-events-auto flex max-h-[calc(100vh-9rem)] w-[min(94%,380px)] flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/96 shadow-[0_18px_48px_rgba(15,23,42,0.16)] backdrop-blur-xl'
+      }
       {...workspaceCanvasScrollableRegionProps<HTMLDivElement>()}
     >
-      <header className="flex items-start gap-2 border-b border-slate-100 px-4 py-3">
+      <header className="flex shrink-0 items-start gap-2 border-b border-slate-100 px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-semibold text-slate-900">{t(stage.key)}</span>
@@ -226,6 +238,7 @@ export function ProductionStepContentPanel({
       ) : null}
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
+        {stage.key === 'assets' ? <ProjectAspectRatioControl projectId={projectId} /> : null}
         {contentQuery.isLoading ? (
           <p className="px-2 py-6 text-center text-[12px] text-slate-400">{t('content.loading')}</p>
         ) : contentQuery.isError ? (
@@ -257,30 +270,34 @@ export function ProductionStepContentPanel({
         )}
       </div>
 
-      <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 px-3 py-2.5">
+      <footer className="flex shrink-0 items-center gap-1.5 border-t border-slate-100 px-2.5 py-2.5">
         <button
           type="button"
-          className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-slate-500 transition hover:bg-slate-100"
-          onClick={() => onOpenResourcePath(stage.defaultFolderPath)}
+          disabled={!locatePath}
+          className="inline-flex h-9 min-w-0 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-2 text-[11px] font-semibold text-slate-500 transition hover:bg-slate-100 disabled:cursor-default disabled:opacity-45 disabled:hover:bg-transparent"
+          onClick={() => {
+            if (locatePath) onOpenResourcePath(locatePath)
+          }}
         >
           {t('locate')}
         </button>
-        <button
-          type="button"
-          className="glass-btn-base glass-btn-primary px-4 py-1.5 text-[12px]"
-          onClick={onStart}
-        >
-          {t('start')}
-        </button>
-        {counts.total > 0 ? (
+        {counts.total === 0 ? (
           <button
             type="button"
-            className="rounded-full border border-slate-200 px-4 py-1.5 text-[12px] font-semibold text-slate-600 transition hover:bg-slate-50"
+            className="glass-btn-base glass-btn-primary inline-flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap px-2 text-[11px]"
+            onClick={onStart}
+          >
+            {t('start')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="inline-flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-full border border-slate-200 px-2 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
             onClick={onReview}
           >
             {t('review')}
           </button>
-        ) : null}
+        )}
       </footer>
     </div>
   )

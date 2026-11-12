@@ -17,6 +17,8 @@ import {
   resolveCompatibleMediaProviderRoutes,
   type ProviderMediaInputKind,
 } from '@/lib/ai-exec/media-input-transport'
+import { imageReferenceCountIssue } from '@/lib/ai-registry/generation-reference-policy'
+import { resolveVideoModelAvailability } from '@/lib/ai-registry/video-availability'
 
 export function normalizeMediaOptionsForSelection(input: {
   readonly selection: AiResolvedSelection
@@ -58,6 +60,13 @@ export function normalizeMediaOptionsForSelection(input: {
     options: input.options,
     context: `${input.modality}:${input.selection.modelKey}`,
   })
+  if (input.modality === 'image' && Array.isArray(options?.referenceImages)) {
+    const issue = imageReferenceCountIssue(descriptor.capabilities.image?.maxReferenceImages, options.referenceImages.length)
+    if (issue) throw new AiOptionValidationError({
+      failure: 'invalid_option', context: `image:${input.selection.modelKey}`,
+      field: 'referenceImages', reason: issue.code,
+    })
+  }
   const promptMaxChars = input.modality === 'music'
     ? descriptor.capabilities.music?.promptMaxChars
     : undefined
@@ -95,7 +104,13 @@ export async function preflightMediaGenerationOptions(input: {
     : await resolveModelSelection(input.userId, input.modelKey, input.modality)
   // Provider credential/config availability is local and deterministic. Do
   // not reserve credits or create a Task that can only fail before HTTP.
-  await getProviderConfig(input.userId, selection.provider)
+  const providerConfig = await getProviderConfig(input.userId, selection.provider)
+  if (input.modality === 'video') {
+    const availability = resolveVideoModelAvailability(selection.modelKey, providerConfig)
+    if (availability.reason) throw new AiOptionValidationError({
+      failure: 'invalid_option', context: `video:${selection.modelKey}`, field: 'configuration', reason: availability.reason,
+    })
+  }
   return {
     selection,
     options: normalizeMediaOptionsForSelection({

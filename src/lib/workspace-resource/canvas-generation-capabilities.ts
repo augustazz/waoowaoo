@@ -28,6 +28,8 @@ export interface WorkspaceCanvasImageGenerationCapabilityView {
   readonly fixedParameters: Readonly<Record<string, CapabilityValue>>
   readonly unavailableReason: 'fixed_parameters' | 'pricing' | null
   readonly maxReferenceImages: number
+  readonly modelMaxReferenceImages?: number
+  readonly referenceCapabilityKnown?: boolean
   /** Project frame vocabulary entries this model accepts; empty means the model takes no frame option. */
   readonly aspectRatios: readonly string[]
   /** Model parameters the user may still choose (fixed ones are server-owned and absent). */
@@ -35,6 +37,8 @@ export interface WorkspaceCanvasImageGenerationCapabilityView {
 }
 
 export interface WorkspaceCanvasVideoGenerationCapabilityView extends WorkspaceCanvasImageGenerationCapabilityView {
+  readonly contractRules?: ProductionVideoModel['contractRules']
+  readonly audio?: ProductionVideoModel['audio']
   readonly referenceDurationLimits: Readonly<Record<'audio' | 'video', GenerationReferenceDurationLimits>>
   readonly durationsSeconds: readonly number[]
   readonly supportedInputModes: readonly VideoInputMode[]
@@ -89,6 +93,8 @@ export function projectWorkspaceCanvasGenerationCapabilities(context: ProjectPro
           ...common(imageModel),
           modelName: imageModel.name,
           maxReferenceImages: imageModel.maxReferenceImages,
+          modelMaxReferenceImages: imageModel.maxReferenceImages,
+          referenceCapabilityKnown: imageModel.referenceCapabilityKnown,
           aspectRatios: imageModel.aspectRatios,
           parameters: userParameters(context, imageModel),
         }
@@ -97,6 +103,8 @@ export function projectWorkspaceCanvasGenerationCapabilities(context: ProjectPro
       ? {
           ...common(videoModel),
           modelName: videoModel.name,
+          contractRules: videoModel.contractRules,
+          audio: videoModel.audio,
           referenceDurationLimits: projectReferenceDurationLimits(videoModel),
           firstFrameAspectRatio: videoModel.firstFrameAspectRatio,
           pricingLimited: videoModel.pricingLimited,

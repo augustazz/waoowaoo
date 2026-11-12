@@ -17,6 +17,7 @@ import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 import { MAX_IMAGE_BYTES, readResponseBufferWithLimit } from '@/lib/http/body-limits'
 import { withRetry } from '@/lib/retry'
 import { getDeploymentConfig } from '@/lib/deployment/config'
+import { DEFAULT_SIGNED_URL_EXPIRES_SECONDS } from '@/lib/storage/utils'
 
 export { detectMimeFromBuffer } from '@/lib/media/media-mime'
 
@@ -85,7 +86,6 @@ const logger = createScopedLogger({
 
 const NEXT_IMAGE_PATH = '/_next/image'
 const MAX_NEXT_IMAGE_UNWRAP_DEPTH = 6
-const SIGNED_URL_TTL_SECONDS = 3600
 const SUPPORTED_PROVIDER_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -198,7 +198,7 @@ function guessContentType(input: string, contentTypeHeader: string | null, buffe
 async function signStorageKey(storageKey: string): Promise<string> {
   const { getSignedObjectUrl, toFetchableUrl } = await getStorageHelpers()
   return toFetchableUrl(await getSignedObjectUrl(storageKey, {
-    expiresInSeconds: SIGNED_URL_TTL_SECONDS,
+    expiresInSeconds: DEFAULT_SIGNED_URL_EXPIRES_SECONDS,
   }))
 }
 

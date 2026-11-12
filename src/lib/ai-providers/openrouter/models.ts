@@ -63,7 +63,7 @@ export const OPENROUTER_BANANA_2_ASPECT_RATIO_OPTIONS = [
   '8:1', '9:16', '16:9', '21:9',
 ] as const
 
-const OPENROUTER_IMAGE_REFERENCE_LIMITS: Readonly<Record<string, number>> = {
+export const OPENROUTER_IMAGE_REFERENCE_LIMITS: Readonly<Record<string, number>> = {
   [OPENROUTER_GPT_IMAGE_2_MODEL_ID]: 16,
   [OPENROUTER_SEEDREAM_5_PRO_MODEL_ID]: 14,
   [OPENROUTER_BANANA_PRO_IMAGE_MODEL_ID]: 14,

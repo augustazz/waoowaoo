@@ -6,6 +6,9 @@ import { workspaceResourceGenerationOptionsSchema } from './generation-contract'
 import {
   workspaceResourceLifecycleProjectionSchema,
 } from './task-runtime-envelope'
+import { WORKSPACE_RESOURCE_SCHEMA } from './schema-registry'
+
+export const VIDEO_MERGE_FPS = 30
 
 const videoMergeInputRefSchema = z.object({
   resourceId: z.string().trim().min(1),
@@ -20,6 +23,9 @@ export const videoMergeTrimSchema = z.object({
   endSeconds: z.number().finite().positive(),
 }).strict().refine((value) => value.endSeconds > value.startSeconds, {
   message: 'endSeconds must be greater than startSeconds.',
+}).refine((value) => Math.round((value.endSeconds - value.startSeconds) * VIDEO_MERGE_FPS) >= 1, {
+  message: 'Trim duration must round to at least one frame at 30 fps (at least 1/60 second).',
+  path: ['endSeconds'],
 })
 
 export const videoMergeOutputSchema = z.object({
@@ -27,8 +33,6 @@ export const videoMergeOutputSchema = z.object({
   resolution: z.enum(VIDEO_RESOLUTIONS.map((resolution) => resolution.value) as [string, ...string[]]),
   audioMode: z.enum(['preserve', 'mute']),
 }).strict().describe('Explicit output format. Resolution is the short edge; preserve keeps source audio and music cues, mute removes all audio. Output uses 30 fps with letterboxing and the requested display aspect ratio.')
-
-export const VIDEO_MERGE_FPS = 30
 
 export const videoMergeEditSchema = z.object({
   clips: z.array(z.object({
@@ -40,6 +44,11 @@ export const videoMergeEditSchema = z.object({
   height: z.number().int().positive().multipleOf(2),
   aspectRatio: generationAspectRatioSchema,
   audioMode: z.enum(['preserve', 'mute']),
+  cover: z.object({
+    videoIndex: z.number().int().nonnegative(),
+    frame: z.number().int().nonnegative(),
+    timestampFrame: z.number().int().nonnegative(),
+  }).strict().nullable().optional().default(null),
 }).strict()
 
 const videoMergeInputsSchema = z.array(videoMergeInputRefSchema).min(1).max(51)
@@ -56,7 +65,12 @@ export const workspaceResourceVideoMergeTaskPayloadSchema = z.object({
   resource: z.object({
     resourceId: z.string().trim().min(1),
     mediaType: z.literal('video'),
-    schemaId: z.literal('generic.video'),
+    // New merges produce final-cut Resources. Keep legacy generic outputs
+    // readable for already frozen tasks without changing source video types.
+    schemaId: z.enum([
+      WORKSPACE_RESOURCE_SCHEMA.COMPOSITE_VIDEO,
+      WORKSPACE_RESOURCE_SCHEMA.GENERIC_VIDEO,
+    ]),
     prompt: z.null(),
     modelKey: z.null(),
     inputHash: z.string().length(64),
@@ -80,6 +94,9 @@ export const workspaceResourceVideoMergeTaskPayloadSchema = z.object({
     })).max(50),
     toolCallId: z.string().trim().min(1).nullable(),
   }).strict().superRefine((resource, context) => {
+    if (new Set(resource.inputs.map((input) => input.position)).size !== resource.inputs.length) {
+      context.addIssue({ code: 'custom', path: ['inputs'], message: 'Frozen input positions must be unique across all roles.' })
+    }
     const bgmPositions = new Set(
       resource.inputs
         .filter((reference) => reference.role === 'bgm_audio')
@@ -102,6 +119,16 @@ export const workspaceResourceVideoMergeTaskPayloadSchema = z.object({
     if (resource.edit.clips.length !== sourceCount || new Set(resource.edit.clips.map((clip) => clip.inputPosition)).size !== sourceCount || resource.edit.clips.some((clip) => !sourcePositions.has(clip.inputPosition))) {
       context.addIssue({ code: 'custom', path: ['edit', 'clips'], message: 'Every source video requires exactly one frozen edit.' })
     }
+    if (resource.edit.cover !== null) {
+      const cover = resource.edit.cover
+      const orderedClips = resource.inputs.filter((input) => input.role === 'source_video')
+        .map((input) => resource.edit.clips.find((clip) => clip.inputPosition === input.position))
+      const selected = orderedClips[cover.videoIndex]
+      const timestampFrame = orderedClips.slice(0, cover.videoIndex).reduce((total, clip) => total + (clip?.frameCount ?? 0), 0) + cover.frame
+      if (!selected || cover.frame >= selected.frameCount || cover.timestampFrame !== timestampFrame) {
+        context.addIssue({ code: 'custom', path: ['edit', 'cover'], message: 'Frozen cover frame must match its selected clip and rendered timeline.' })
+      }
+    }
     if (resource.edit.audioMode === 'mute' && resource.musicCues.length > 0) {
       context.addIssue({ code: 'custom', path: ['edit', 'audioMode'], message: 'Mute cannot be combined with music cues.' })
     }
@@ -112,10 +139,24 @@ export const workspaceResourceVideoMergeTaskPayloadSchema = z.object({
         message: 'Music cues can only be placed onto one already-merged source video.',
       })
     }
+    const durationMs = resource.edit.clips.reduce((total, clip) => total + clip.frameCount, 0) * 1000 / VIDEO_MERGE_FPS
+    for (const [index, cue] of resource.musicCues.entries()) {
+      if (cue.startMs + cue.durationMs > durationMs) {
+        context.addIssue({ code: 'custom', path: ['musicCues', index], message: 'Music cue exceeds the frozen output timeline.' })
+      }
+    }
   }),
-}).strict()
+}).strict().superRefine((payload, context) => {
+  const [output] = payload.lifecycleProjection.resources
+  if (payload.lifecycleProjection.resources.length !== 1
+    || output.resourceId !== payload.resource.resourceId
+    || output.mediaType !== payload.resource.mediaType
+    || output.schemaId !== payload.resource.schemaId) {
+    context.addIssue({ code: 'custom', path: ['lifecycleProjection'], message: 'Merge lifecycle projection must identify its single video output.' })
+  }
+})
 
-const workspaceResourceVideoMergeTaskEnvelopeSchema = workspaceResourceVideoMergeTaskPayloadSchema.extend({
+const workspaceResourceVideoMergeTaskEnvelopeSchema = workspaceResourceVideoMergeTaskPayloadSchema.safeExtend({
   ...taskRuntimePayloadEnvelopeShape,
 }).strict()
 

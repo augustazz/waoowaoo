@@ -40,6 +40,7 @@ export interface ProductionContentResourceRow {
   readonly name: string
   readonly workspacePath: string
   readonly status: WorkspaceResourceStatus
+  readonly workflowEnabled?: boolean
   readonly schemaId: string
   readonly mediaType: WorkspaceResourceMediaType | null
   readonly currentVersion: number
@@ -60,6 +61,7 @@ export interface ProductionContentItemView {
   readonly name: string
   readonly workspacePath: string
   readonly status: WorkspaceResourceStatus
+  readonly workflowEnabled?: boolean
   readonly schemaId: string
   readonly mediaType: WorkspaceResourceMediaType | null
   readonly contentVersion: number
@@ -107,10 +109,11 @@ function addStatus(
 }
 
 export function countProductionContentRows(
-  rows: readonly Pick<ProductionContentResourceRow, 'status'>[],
+  rows: readonly Pick<ProductionContentResourceRow, 'status' | 'workflowEnabled'>[],
 ): ProductionContentCounts {
   let counts = EMPTY_PRODUCTION_CONTENT_COUNTS
   for (const row of rows) {
+    if (row.workflowEnabled === false) continue
     counts = addStatus({ ...counts, total: counts.total + 1 }, row.status)
   }
   return counts
@@ -279,6 +282,7 @@ function itemView(row: ProductionContentResourceRow): ProductionContentItemView 
     name: row.name,
     workspacePath: row.workspacePath,
     status: row.status,
+    workflowEnabled: row.workflowEnabled,
     schemaId: row.schemaId,
     mediaType: row.mediaType,
     contentVersion: row.currentVersion,
@@ -288,7 +292,8 @@ function itemView(row: ProductionContentResourceRow): ProductionContentItemView 
 }
 
 function primaryResourceId(rows: readonly ProductionContentResourceRow[]): string | null {
-  return (rows.find((row) => row.status === 'ready') ?? rows[0])?.id ?? null
+  const enabled = rows.filter((row) => row.workflowEnabled !== false)
+  return (enabled.find((row) => row.status === 'ready') ?? enabled[0])?.id ?? null
 }
 
 function groupView(input: {

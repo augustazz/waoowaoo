@@ -7,6 +7,7 @@ import {
   resolveActiveWorkspaceResourceByPath,
   restoreWorkspaceResourceInTransaction,
   softDeleteWorkspaceResourceInTransaction,
+  setWorkspaceResourceWorkflowInTransaction,
 } from '@/lib/workspace-resource/persistence'
 import {
   listWorkspaceResourceTreePage,
@@ -269,6 +270,28 @@ export function createWorkspaceResourceOperations(): ProjectAgentOperationRegist
           projectId: ctx.projectId,
           resourceId: input.resourceId,
           workspacePath: input.workspacePath,
+        }),
+      }),
+    }),
+    set_resource_workflow: defineOperation({
+      id: 'set_resource_workflow',
+      summary: 'Enable or disable an existing file for future workflow use while keeping it visible.',
+      intent: 'act',
+      channels: { tool: false, api: true, mcp: false },
+      effects: writeEffects({ destructive: false, overwrite: false, bulk: false }),
+      resourceContract: { kind: 'none', reason: 'changes participation of an existing Resource' },
+      confirmation: { kind: 'none', required: false },
+      inputSchema: z.object({
+        resourceId: z.string().trim().min(1).max(32),
+        workflowEnabled: z.boolean(),
+      }).strict(),
+      outputSchema: z.object({
+        success: z.literal(true), resourceId: z.string(), workflowEnabled: z.boolean(),
+      }).strict(),
+      executeInTransaction: async (ctx, input, tx) => ({
+        success: true as const,
+        ...await setWorkspaceResourceWorkflowInTransaction(tx, {
+          userId: ctx.userId, projectId: ctx.projectId, ...input,
         }),
       }),
     }),

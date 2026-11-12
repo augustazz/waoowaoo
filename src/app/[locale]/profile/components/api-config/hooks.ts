@@ -306,6 +306,7 @@ export function useProviders(): UseProvidersReturn {
      */
     const selectSlotModel = useCallback((type: UnifiedModelType, modelKey: string) => {
         if (modelKey && !latestModelsRef.current.some(model => model.modelKey === modelKey && model.type === type)) return
+        if (type === 'video' && latestModelsRef.current.find(model => model.modelKey === modelKey)?.videoAvailability?.status === 'unavailable') return
         const nextModels = latestModelsRef.current.map(model => model.type === type
             ? { ...model, enabled: type === 'llm'
                 ? model.enabled || model.modelKey === modelKey
@@ -326,6 +327,9 @@ export function useProviders(): UseProvidersReturn {
     }, [performSave])
 
     const selectDiscoveredModel = useCallback(async (model: Omit<CustomModel, 'enabled'>) => {
+        if (model.type === 'video' && model.videoAvailability?.status === 'unavailable') throw new Error('VIDEO_MODEL_UNAVAILABLE')
+        const previousModels = latestModelsRef.current
+        const previousDefaults = latestDefaultModelsRef.current
         const modelKey = encodeModelKey(model.provider, model.modelId)
         const existing = latestModelsRef.current.find(item => item.modelKey === modelKey)
         if (existing && existing.type !== model.type) throw new Error('MODEL_TYPE_CONFLICT')
@@ -340,7 +344,13 @@ export function useProviders(): UseProvidersReturn {
             : latestDefaultModelsRef.current
         latestDefaultModelsRef.current = defaults
         setDefaultModels(defaults)
-        if (!await performSave({ defaultModels: defaults })) throw new Error('MODEL_SAVE_FAILED')
+        if (!await performSave({ defaultModels: defaults })) {
+            latestModelsRef.current = previousModels
+            latestDefaultModelsRef.current = previousDefaults
+            setModels(previousModels)
+            setDefaultModels(previousDefaults)
+            throw new Error('MODEL_SAVE_FAILED')
+        }
     }, [performSave])
 
     const updateModel = useCallback((modelKey: string, updates: Partial<CustomModel>, providerId?: string) => {

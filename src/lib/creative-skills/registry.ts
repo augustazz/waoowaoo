@@ -15,9 +15,9 @@ function defineSkill(
 export const CREATIVE_SKILL_REGISTRY: Readonly<Record<CreativeSkillId, CreativeSkillDefinition>> = {
   'creative-core': defineSkill({
     id: 'creative-core',
-    version: '1.6.0',
+    version: '1.7.0',
     title: '创作核心',
-    summary: '主 Agent 专业创作共用的事实边界、目标忠实性、假设管理、续作状态锚定、源文本时间线纪律、通用时长估算与交付自检。',
+    summary: '主 Agent 专业创作共用的事实边界、目标忠实性、续作状态锚定、视觉物理一致性、源文本时间线纪律、通用时长估算与交付自检。',
     tags: ['core', 'creative', 'reasoning', 'quality', 'duration', 'continuity'],
   }),
   'script-development': defineSkill({
@@ -29,30 +29,30 @@ export const CREATIVE_SKILL_REGISTRY: Readonly<Record<CreativeSkillId, CreativeS
   }),
   'creative-direction': defineSkill({
     id: 'creative-direction',
-    version: '5.1.0',
+    version: '5.2.0',
     title: '创作方向',
-    summary: '把用户意图与必要研究收敛为一份只决定呈现、不改写源文本内容或时间线的六领域方向；声明核心呈现冻结检查点。',
+    summary: '把用户意图与必要研究收敛为一份只决定呈现、不改写源文本内容或时间线的六领域方向；区分真人摄影与动画的媒介、色彩和边缘政策；声明核心呈现冻结检查点。',
     tags: ['creative-direction', 'style', 'narrative', 'directing', 'editing', 'sound', 'assets'],
   }),
   'asset-development': defineSkill({
     id: 'asset-development',
-    version: '5.4.0',
+    version: '5.8.0',
     title: '资产范围与视觉设计',
-    summary: '从精确源文本筛选可复用资产，完成稳定设计与最终图片提示词；声明可复用资产类型与生成后评审检查点；生成画幅由服务端资产策略决定。',
+    summary: '从精确源文本筛选可复用资产，先选图片风格、生成首张并验收，再生成余项；完成自然肤色、人像和空间设计，统一使用项目画幅；声明全部资产就绪后的评审检查点。',
     tags: ['asset', 'image', 'character', 'location', 'prop', 'reference', 'candidate'],
   }),
   'video-direction': defineSkill({
     id: 'video-direction',
-    version: '4.3.0',
+    version: '4.7.1',
     title: '视频导演与生成设计',
-    summary: '以结构化状态接力和物理表演设计完成整片时间线、最少分段装载、最终提示词与接缝自检；声明完整视频作品的规划纪律与交付检查。',
+    summary: '以结构化状态接力、物件物理一致性和表演设计完成整片时间线、最少分段装载、最终提示词与接缝自检；涉及关键帧图片时先验收首图；声明完整视频作品的规划纪律与交付检查。',
     tags: ['video', 'director', 'prompt', 'editing', 'timeline', 'shot', 'camera', 'continuity', 'audio'],
   }),
   'music-direction': defineSkill({
     id: 'music-direction',
-    version: '3.2.0',
+    version: '3.3.1',
     title: '音乐与配乐设计',
-    summary: '从内容与真实成片时间线决定配乐窗口，并直接创作 Eleven Music v2 Composition Plan 与精确 cue 合成参数；声明配乐决定检查点。',
+    summary: '完整作品首次视频生成前确认并记录配乐方向；成片时间线确定后创作 Eleven Music v2 Composition Plan 与精确 cue 合成参数。关键帧不阻塞，取消不默认无配乐。',
     tags: ['music', 'bgm', 'score', 'audio', 'composition-plan', 'timeline'],
   }),
 }

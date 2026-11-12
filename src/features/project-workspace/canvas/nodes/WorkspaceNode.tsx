@@ -23,6 +23,7 @@ const SELECTABLE_CARD_CHROME_CLASS = 'select-none cursor-grab active:cursor-grab
 export default function WorkspaceNode({ data, id }: NodeProps<WorkspaceCanvasFlowNode>) {
   const labels = useTranslations('projectWorkflow.canvas.workspace.nodeFields')
   const statusLabels = useTranslations('projectWorkflow.canvas.workspace.status')
+  const workflowDisabled = data.kind === 'resourceCard' && data.resourceDetails.resource.workflowEnabled === false
   const nodeDefinition = getWorkspaceCanvasNodeDefinition(data.kind)
   const presentation = nodeDefinition.presentation
   const isRunning = nodeIsRunning(data)
@@ -57,7 +58,7 @@ export default function WorkspaceNode({ data, id }: NodeProps<WorkspaceCanvasFlo
         ) : null}
 
         <article
-          className={`workspace-canvas-node-shell relative h-full cursor-pointer overflow-visible rounded-[18px] border bg-white/92 shadow-[0_12px_36px_rgba(15,23,42,0.07)] backdrop-blur-xl transition-[border-color,box-shadow] duration-150 active:cursor-grabbing ${
+          className={`workspace-canvas-node-shell relative h-full cursor-pointer overflow-visible rounded-[18px] border bg-white/92 shadow-[0_12px_36px_rgba(15,23,42,0.07)] backdrop-blur-xl transition-[border-color,box-shadow] duration-150 active:cursor-grabbing ${workflowDisabled ? 'border-dashed' : ''} ${
             data.uiSelected
               ? 'border-slate-500 shadow-[0_0_0_2px_rgba(255,255,255,0.96),0_0_0_5px_rgba(100,116,139,0.5),0_18px_48px_rgba(15,23,42,0.18)]'
               : data.uiMultiSelected
@@ -67,6 +68,7 @@ export default function WorkspaceNode({ data, id }: NodeProps<WorkspaceCanvasFlo
                 : 'border-slate-200/80'
           }`}
           data-node-id={data.nodeId}
+          data-workflow-enabled={!workflowDisabled}
           data-lifecycle-phase={data.lifecycle.phase}
           data-lifecycle-task-id={data.lifecycle.taskId ?? ''}
           onClick={(event) => {
@@ -87,6 +89,11 @@ export default function WorkspaceNode({ data, id }: NodeProps<WorkspaceCanvasFlo
             >
               {data.title}
             </h2>
+            {workflowDisabled ? (
+              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                {statusLabels('disabled')}
+              </span>
+            ) : null}
             {data.lifecycle.phase !== 'succeeded' ? (
               <span
                 className={`${SELECTABLE_CARD_CHROME_CLASS} inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${

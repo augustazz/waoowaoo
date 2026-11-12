@@ -64,3 +64,32 @@ export const DELETE = apiHandler(async (
   })
   return NextResponse.json(result)
 })
+
+/** Reversible workflow participation through the canonical mutation authority. */
+export const PATCH = apiHandler(async (
+  request: NextRequest,
+  context: { params: Promise<{ projectId: string; resourceId: string }> },
+) => {
+  const { projectId, resourceId } = await context.params
+  const auth = await requireProjectAuthLight(projectId)
+  if (isErrorResponse(auth)) return auth
+  const body: unknown = await request.json().catch(() => {
+    throw new ApiError('INVALID_PARAMS', { field: 'workflowEnabled' })
+  })
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+    || Object.keys(body).length !== 1 || !('workflowEnabled' in body)
+    || typeof body.workflowEnabled !== 'boolean') {
+    throw new ApiError('INVALID_PARAMS', { field: 'workflowEnabled' })
+  }
+  const result = await executeProjectAgentOperationFromApi({
+    request,
+    operationId: 'set_resource_workflow',
+    projectId,
+    userId: auth.session.user.id,
+    input: { resourceId, workflowEnabled: body.workflowEnabled },
+    source: 'project-ui',
+    responseContract: 'operation_mutation_response_v1',
+    requireIdempotencyKey: true,
+  })
+  return NextResponse.json(result)
+})

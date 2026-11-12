@@ -7,6 +7,7 @@ import type {
 } from '@/lib/workspace-resource/contracts'
 import type {
   WorkspaceCanvasDeleteOperationView,
+  WorkspaceCanvasResourceOperationView,
   WorkspaceCanvasResourceFileView,
   WorkspaceCanvasResourceSummaryView,
   WorkspaceResourceCardMemberView,
@@ -82,6 +83,7 @@ function resourceSummary(resource: WorkspaceCanvasResourceFileView): WorkspaceCa
       width: content.width,
       height: content.height,
       durationMs: content.durationMs,
+      posterUrl: content.posterUrl,
     }
   }
   if (resource.summary.kind === 'text') {
@@ -103,6 +105,7 @@ function resourceSummary(resource: WorkspaceCanvasResourceFileView): WorkspaceCa
       width: resource.summary.width,
       height: resource.summary.height,
       durationMs: resource.summary.durationMs,
+      posterUrl: resource.summary.posterUrl,
     }
   }
   return { kind: 'empty' }
@@ -123,6 +126,7 @@ function alternativeMember(
       resourceId: member.resourceId,
       name: memberName(member),
       status: member.status,
+      workflowEnabled: member.workflowEnabled,
       mediaType,
       schemaId: member.schemaId,
       error: null,
@@ -136,6 +140,7 @@ function alternativeMember(
         kind: 'media',
         mediaType,
         url: member.previewUrl,
+        posterUrl: member.posterUrl,
         mimeType: null,
         width: null,
         height: null,
@@ -172,13 +177,14 @@ function deleteOperation(resource: WorkspaceResourceView): WorkspaceCanvasDelete
 export function projectWorkspaceResourceCard(resourceView: WorkspaceResourceView): WorkspaceResourceCardView {
   const resource = requireFileResource(resourceView)
   const download = resource.actions.find((action) => action.kind === 'download' && action.enabled && action.href)
-  const billableOperations = resource.actions.flatMap((action) => {
+  const productionOperations = resource.actions.flatMap((action): WorkspaceCanvasResourceOperationView[] => {
     if (
       (action.kind !== 'retry' && action.kind !== 'regenerate')
       || !action.enabled
       || !action.operationId
       || !action.input
     ) return []
+    if (action.operationId === 'merge_videos') return [{ kind: 'retry', operationId: 'merge_videos', confirmation: 'none', input: action.input }]
     return [{
       kind: action.kind,
       operationId: action.operationId,
@@ -215,7 +221,7 @@ export function projectWorkspaceResourceCard(resourceView: WorkspaceResourceView
       members: allAlternativeMembers,
     } : null,
     canvasOperations: [
-      ...billableOperations,
+      ...productionOperations,
       ...(projectedDeleteOperation ? [projectedDeleteOperation] : []),
     ],
   }

@@ -175,7 +175,7 @@ export const PRODUCTION_STAGE_DEFINITIONS: readonly ProductionStageDefinition[] 
     primarySchemaIds: [WORKSPACE_RESOURCE_SCHEMA.CREATIVE_DIRECTION],
     requiredSchemaIds: [WORKSPACE_RESOURCE_SCHEMA.CREATIVE_DIRECTION],
     optionalSchemaIds: [],
-    defaultFolderPath: '创作方向',
+    defaultFolderPath: '方向',
     contentGrouping: 'episode',
   }),
   defineProductionStage({
@@ -325,9 +325,18 @@ export function productionStageDefinition(
 /** Schema IDs that participate in the stage rail, for narrow database queries. */
 export const PRODUCTION_STAGE_SCHEMA_IDS: readonly string[] = [...STAGE_BY_SCHEMA_ID.keys()]
 
-/** Canonical step folders, for queries that need folder-owned Resources too. */
+/** Keep existing files readable under the former directory name. */
+const STAGE_FOLDER_ALIASES: Partial<Record<ProductionStageKey, readonly string[]>> = {
+  direction: ['创作方向'],
+}
+
+export function productionStageFolderPaths(key: ProductionStageKey): readonly string[] {
+  return [productionStageDefinition(key).defaultFolderPath, ...(STAGE_FOLDER_ALIASES[key] ?? [])]
+}
+
+/** Step folders including aliases, for queries over folder-owned Resources. */
 export const PRODUCTION_STAGE_FOLDER_PATHS: readonly string[] = PRODUCTION_STAGE_DEFINITIONS
-  .map((definition) => definition.defaultFolderPath)
+  .flatMap((definition) => productionStageFolderPaths(definition.key))
 
 /**
  * Folders of steps that group their files by episode. The asset step groups by
@@ -336,7 +345,7 @@ export const PRODUCTION_STAGE_FOLDER_PATHS: readonly string[] = PRODUCTION_STAGE
  */
 export const PRODUCTION_EPISODE_FOLDER_PATHS: readonly string[] = PRODUCTION_STAGE_DEFINITIONS
   .filter((definition) => definition.contentGrouping === 'episode')
-  .map((definition) => definition.defaultFolderPath)
+  .flatMap((definition) => productionStageFolderPaths(definition.key))
 
 /**
  * Folder-first ownership: a Resource inside a step folder belongs to that step
@@ -345,11 +354,21 @@ export const PRODUCTION_EPISODE_FOLDER_PATHS: readonly string[] = PRODUCTION_STA
  */
 export function productionStageForWorkspacePath(workspacePath: string): ProductionStageKey | null {
   for (const definition of PRODUCTION_STAGE_DEFINITIONS) {
-    if (workspacePath.startsWith(`${definition.defaultFolderPath}/`)) {
+    if (productionStageFolderPaths(definition.key).some((path) => workspacePath.startsWith(`${path}/`))) {
       return definition.key
     }
   }
   return null
+}
+
+/**
+ * Step owning a folder, including the canonical step folder itself. Folder
+ * navigation needs the exact-or-descendant form because
+ * `productionStageForWorkspacePath` only matches descendants.
+ */
+export function productionStageForFolderPath(folderPath: string): ProductionStageKey | null {
+  const normalized = folderPath.replace(/\/+$/, '')
+  return normalized ? productionStageForWorkspacePath(`${normalized}/`) : null
 }
 
 /**
@@ -370,6 +389,7 @@ export interface ProductionStageResourceRow {
   readonly name: string
   readonly workspacePath: string
   readonly status: WorkspaceResourceStatus
+  readonly workflowEnabled?: boolean
   readonly schemaId: string
   readonly mediaType: WorkspaceResourceMediaType | null
   readonly currentVersion: number
@@ -389,6 +409,7 @@ export interface ProductionStageResourceView {
   readonly name: string
   readonly workspacePath: string
   readonly status: WorkspaceResourceStatus
+  readonly workflowEnabled?: boolean
   readonly schemaId: string
   readonly mediaType: WorkspaceResourceMediaType | null
   readonly contentVersion: number
@@ -511,6 +532,7 @@ export function summarizeProductionStages(
   const itemLimit = Math.max(0, options?.itemLimit ?? DEFAULT_STAGE_ITEM_LIMIT)
   const rowsByStage = new Map<ProductionStageKey, ProductionStageResourceRow[]>()
   for (const row of rows) {
+    if (row.workflowEnabled === false) continue
     const stage = productionStageForResource(row)
     if (!stage) continue
     const bucket = rowsByStage.get(stage)

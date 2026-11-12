@@ -82,6 +82,9 @@ export const ASSISTANT_RUNTIME_STATIC_CONTRACT = {
       remoteCompactionV2: false,
       codeMode: {
         enabled: true,
+        // These tools are declared directly to the model and intentionally
+        // absent from exec's ALL_TOOLS. Keep turn guidance explicit so absence
+        // from that partial index is never diagnosed as a missing generator.
         directOnlyToolNamespaces: ['mcp__wao'],
       },
       codeModeHost: {
@@ -315,6 +318,7 @@ export function buildAssistantRuntimeTurnContext(
     '<wao_project_production_context>',
     formatProjectProductionContext(projectProductionContext),
     '</wao_project_production_context>',
+    'Wao business tools are direct-only MCP tools in mcp__wao. Use their current direct Schema outside functions.exec; exec ALL_TOOLS does not index them. An empty ALL_TOOLS search is not evidence of a missing Wao generator. Check the current direct declarations and unavailableProductionTools; never use a paid submission as a tool-discovery probe.',
     'Use the currently available production tools. Their model branches declare model keys, capabilities and allowed parameters in user preference order. Prefer earlier models unless the task needs a later model’s capability or cost profile, and briefly explain that choice. Fill all exposed parameters; fixed parameters are applied by the server and are not input fields. Never invent a model or fallback outside those branches.',
     ...(canvasGenerationIntent ? [
       '<canvas_generation_intent>',

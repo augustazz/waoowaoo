@@ -27,15 +27,30 @@ function projectAnnotations(
 function projectTool(
   operation: ProjectAgentOperationDefinition,
 ): Tool {
+  // The pinned runtime drops array schemas inside union branches when it
+  // projects MCP tools for direct code-mode calls. Keep the canonical schema
+  // verbatim in the same tool declaration as well; this is declarative input
+  // documentation, not a second execution surface or a relaxed validator.
+  const schema = operation.toolInputSchema
   return {
     name: operation.id,
-    description: operation.summary,
+    description: schemaHasUnionArray(schema)
+      ? `${operation.summary}\n\nCanonical input JSON Schema (complete; use it if the runtime projection omits nested fields):\n${JSON.stringify(schema)}`
+      : operation.summary,
     // Registry construction already validates this as a closed object JSON
     // Schema. Keep the exact registry-owned object; MCP must not regenerate or
     // reinterpret the Operation contract.
     inputSchema: operation.toolInputSchema as unknown as Tool['inputSchema'],
     annotations: projectAnnotations(operation),
   }
+}
+
+function schemaHasUnionArray(value: unknown, insideUnion = false): boolean {
+  if (Array.isArray(value)) return value.some((item) => schemaHasUnionArray(item, insideUnion))
+  if (!value || typeof value !== 'object') return false
+  const node = value as Record<string, unknown>
+  if (insideUnion && (node.type === 'array' || (Array.isArray(node.type) && node.type.includes('array')))) return true
+  return Object.entries(node).some(([key, child]) => schemaHasUnionArray(child, insideUnion || key === 'anyOf' || key === 'oneOf'))
 }
 
 export function createWaoMcpOperationCatalog(context: ProjectProductionContext): readonly WaoMcpOperationCatalogEntry[] {

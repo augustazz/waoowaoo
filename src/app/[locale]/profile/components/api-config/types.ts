@@ -49,6 +49,7 @@ export interface Provider {
 
 // 模型接口
 export interface CustomModel {
+    videoAvailability?: import('@/lib/ai-registry/video-availability').VideoModelAvailability
     modelId: string       // 唯一标识符
     modelKey: string      // 唯一主键（provider::modelId）
     name: string          // 显示名称

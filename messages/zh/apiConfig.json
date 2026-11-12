@@ -178,5 +178,15 @@
     "available": "已获取 {count} 个模型，可在上方选择",
     "manual": "手动填写模型 ID",
     "provider": "提供商"
-  }
+  },
+  "videoAvailability": {
+    "provider_configuration_invalid": "未接通：提供商配置或凭据不可用",
+    "capabilities_unknown": "未接通：缺少视频能力声明",
+    "duration_options_missing": "未接通：缺少可用时长",
+    "protocol_unsupported": "未接通：视频协议尚未实现",
+    "channel_mismatch": "未接通：当前 API 地址与渠道声明不匹配",
+    "input_modes_unavailable": "当前部署没有可用的视频输入模式",
+    "pricing": "未接通：缺少当前计费模式需要的价格"
+  },
+  "videoModelChangeHint": "切换仅用于后续新任务；提交前会重新检查已有镜头的时长、画质、参考素材和声音要求。"
 }

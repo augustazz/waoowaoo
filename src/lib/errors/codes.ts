@@ -76,6 +76,8 @@ export const ERROR_CATALOG = {
   OPERATION_IDEMPOTENCY_KEY_REQUIRED: defineErrorSpec('OPERATION_IDEMPOTENCY_KEY_REQUIRED', 400, false, ERROR_CATEGORY.VALIDATION, 'This operation requires a stable request identity'),
   OPERATION_IDEMPOTENCY_KEY_INVALID: defineErrorSpec('OPERATION_IDEMPOTENCY_KEY_INVALID', 400, false, ERROR_CATEGORY.VALIDATION, 'The stable request identity is invalid'),
   OPERATION_PLAN_REQUEST_REPLAY_DIVERGED: defineErrorSpec('OPERATION_PLAN_REQUEST_REPLAY_DIVERGED', 409, false, ERROR_CATEGORY.VALIDATION, 'This request identity was already used for a different operation plan'),
+  WORKSPACE_RESOURCE_DISABLED: defineErrorSpec('WORKSPACE_RESOURCE_DISABLED', 409, false, ERROR_CATEGORY.VALIDATION, 'This resource is disabled. Restore it before using it in new work.'),
+  WORKSPACE_RESOURCE_WORKFLOW_BUSY: defineErrorSpec('WORKSPACE_RESOURCE_WORKFLOW_BUSY', 409, false, ERROR_CATEGORY.VALIDATION, 'Wait for resource generation to finish before changing workflow participation.'),
   WORKSPACE_RESOURCE_RETRY_TARGET_NOT_FOUND: defineErrorSpec('WORKSPACE_RESOURCE_RETRY_TARGET_NOT_FOUND', 404, false, ERROR_CATEGORY.VALIDATION, 'The failed Resource to retry was not found'),
   WORKSPACE_RESOURCE_RETRY_TARGET_DUPLICATE: defineErrorSpec('WORKSPACE_RESOURCE_RETRY_TARGET_DUPLICATE', 400, false, ERROR_CATEGORY.VALIDATION, 'The same Resource was selected more than once'),
   WORKSPACE_RESOURCE_RETRY_TARGET_INVALID: defineErrorSpec('WORKSPACE_RESOURCE_RETRY_TARGET_INVALID', 409, false, ERROR_CATEGORY.VALIDATION, 'This Resource is not currently retryable'),

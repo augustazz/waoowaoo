@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { apiFetch } from '@/lib/api-fetch'
+import type { VideoModelAvailability } from '@/lib/ai-registry/video-availability'
 import type { UnifiedModelType } from '@/lib/ai-registry/types'
 import { encodeModelKey, type CustomModel, type Provider } from '../api-config'
 import type { ProviderCardTranslator } from '../api-config/provider-card/types'
@@ -29,6 +31,19 @@ export function ManualModelEntry({ type, providers, onSelect, t }: {
         setSaving(true)
         setError('')
         try {
+          if (type === 'video') {
+            const response = await apiFetch('/api/user/api-config/provider-models', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ providerId: selectedProvider.id, videoModelId: id }),
+            })
+            if (!response.ok) throw new Error('VIDEO_MODEL_CHECK_FAILED')
+            const checked = await response.json() as { models?: { videoAvailability?: VideoModelAvailability }[] }
+            const availability = checked.models?.[0]?.videoAvailability
+            if (!availability || availability.status !== 'ready') {
+              setError(t(`videoAvailability.${availability?.reason ?? 'capabilities_unknown'}`))
+              return
+            }
+          }
           await onSelect({ provider: selectedProvider.id, modelId: id, modelKey: encodeModelKey(selectedProvider.id, id), name: id, type })
           setModelId('')
           form.closest('details')?.removeAttribute('open')

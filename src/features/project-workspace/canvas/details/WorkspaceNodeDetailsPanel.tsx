@@ -267,6 +267,7 @@ function VideoInputTile({
         // The media fragment forces browsers to paint a poster frame instead of
         // an empty box; playback itself happens in the player slot below.
         src={`${mediaUrl}#t=0.1`}
+        poster={input.posterUrl ?? undefined}
         muted
         playsInline
         preload="metadata"
@@ -301,6 +302,7 @@ function VideoPlayerSlot({
       <video
         src={mediaUrl}
         aria-label={input.name}
+        poster={input.posterUrl ?? undefined}
         controls
         autoPlay
         preload="metadata"
@@ -353,7 +355,21 @@ export function WorkspaceNodeDetailsPanel({
   const labels = useTranslations('projectWorkflow.canvas.workspace.nodeFields')
   const mediaTypeLabels = useTranslations('projectWorkflow.canvas.workspace.nodes.resourceCard.mediaType')
   const common = useTranslations('common')
+  const referenceLabels = useTranslations('projectWorkflow.canvas.workspace.create')
   const errorLabels = useTranslations('projectWorkflow.canvas.workspace.errors')
+  const imageReferences = inputs.filter((input) => input.channel === 'image' || (!input.channel && input.mediaType === 'image' && input.role !== 'context'))
+  const generationOptions = card.resource.generationOptions
+  const submission = generationOptions && typeof generationOptions === 'object' && !Array.isArray(generationOptions)
+    ? generationOptions.imageReferenceSubmission : null
+  const submittedReferences = submission && typeof submission === 'object' && !Array.isArray(submission)
+    && submission.status === 'submitted' && Array.isArray(submission.references) ? submission.references : null
+  const videoVerification = generationOptions && typeof generationOptions === 'object' && !Array.isArray(generationOptions)
+    ? generationOptions.videoOutputVerification : null
+  const videoNeedsReview = videoVerification && typeof videoVerification === 'object' && !Array.isArray(videoVerification)
+    && videoVerification.status === 'needs_review'
+  const referenceResultKey = submittedReferences
+    ? (submittedReferences.length > 0 ? 'referenceResult.submittedImages' : 'referenceResult.submittedTextOnly')
+    : (imageReferences.length > 0 ? 'referenceResult.images' : 'referenceResult.textOnly')
   const resolveClientError = useClientErrorMessage()
   const { projectId } = useWorkspaceProvider()
   // "Run again" is offered only when the server projected the exact Operation
@@ -368,13 +384,14 @@ export function WorkspaceNodeDetailsPanel({
   const generationCapability = regenerationTemplate
     ? canvasGenerationCapabilityFor(actions.generationCapabilities, regenerationTemplate.mediaType, 'manual')
     : null
-  const editor = useWorkspaceNodeGenerationEdits(regenerationTemplate, generationCapability, inputs)
+  const editor = useWorkspaceNodeGenerationEdits(regenerationTemplate, generationCapability, inputs, actions.generationCapabilities?.projectAspectRatio ?? null)
   const referenceOf = (input: WorkspaceResourceInputSummary): WorkspaceResourceRegenerationReference => ({
     resourceId: input.resourceId,
     contentVersion: input.contentVersion,
     durationMs: input.durationMs,
     role: input.role,
-    channel: input.mediaType === 'text' ? 'context' : input.mediaType,
+    channel: input.channel ?? (input.mediaType === 'text' ? 'context' : input.mediaType),
+    ...(input.purpose ? { purpose: input.purpose } : {}),
   })
   const tileEdit = (input: WorkspaceResourceInputSummary): InputTileEdit | undefined => {
     if (!regenerationTemplate) return undefined
@@ -454,6 +471,7 @@ export function WorkspaceNodeDetailsPanel({
 
   return (
     <section className="space-y-2.5 rounded-[20px] border border-slate-200 bg-white/96 p-4 shadow-[0_18px_48px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+      {videoNeedsReview && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">{t('videoNeedsReview')}</p>}
       {isTextResource ? (
         <SectionShell
           title={t('contentSection')}
@@ -490,6 +508,9 @@ export function WorkspaceNodeDetailsPanel({
           )}
         </SectionShell>
       ) : null}
+      {card.resource.mediaType === 'image' && card.resource.status === 'ready' && modelName ? (
+        <p className="px-1 text-xs text-slate-500">{referenceLabels(referenceResultKey, { count: submittedReferences?.length ?? imageReferences.length })}</p>
+      ) : null}
       {inputs.length > 0 ? (
         <SectionShell
           title={labels('generationReferences')}
@@ -505,7 +526,8 @@ export function WorkspaceNodeDetailsPanel({
           >
             {inputs.map((input) => {
               const key = inputKey(input)
-              const mediaTypeLabel = mediaTypeLabels(input.mediaType)
+              const imageIndex = imageReferences.indexOf(input)
+              const mediaTypeLabel = `${mediaTypeLabels(input.mediaType)}${imageIndex >= 0 ? ` ${imageIndex + 1}` : ''} · v${input.contentVersion}${input.purpose ? ` · ${referenceLabels(`referencePurpose.${input.purpose}`)}` : ''}`
               const mediaUrl = input.previewUrl
               if (mediaUrl && input.mediaType === 'audio') {
                 return (
@@ -540,7 +562,7 @@ export function WorkspaceNodeDetailsPanel({
               return (
                 <InputTile
                   key={key}
-                  name={input.name}
+                  name={`${imageIndex >= 0 ? `${imageIndex + 1}. ` : ''}${input.name} · v${input.contentVersion}${input.purpose ? ` · ${referenceLabels(`referencePurpose.${input.purpose}`)}` : ''}`}
                   title={`${input.name} · ${mediaTypeLabel}`}
                   actionLabel={null}
                   highlighted={false}

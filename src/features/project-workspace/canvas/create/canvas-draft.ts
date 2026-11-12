@@ -35,6 +35,7 @@ export interface CanvasDraftReference {
   readonly previewUrl: string | null
   readonly durationMs: number | null
   readonly role: CanvasDraftReferenceRole
+  readonly purpose?: WorkspaceResourceRegenerationReference['purpose']
 }
 
 export type CanvasDraftReferenceCandidate = Omit<CanvasDraftReference, 'role'>
@@ -58,7 +59,7 @@ export type CanvasGenerationCapability =
 /** The reference facts of a projected resource card, ready to attach to a draft. */
 export function canvasDraftReferenceCandidate(card: WorkspaceResourceCardView): CanvasDraftReferenceCandidate | null {
   const resource = card.resource
-  if (resource.status !== 'ready') return null
+  if (resource.status !== 'ready' || resource.workflowEnabled === false) return null
   const summary = card.presentation.summary
   return {
     resourceId: resource.resourceId,
@@ -68,23 +69,10 @@ export function canvasDraftReferenceCandidate(card: WorkspaceResourceCardView): 
     mediaType: resource.mediaType,
     previewUrl: summary.kind === 'media' ? summary.url : null,
     durationMs: summary.kind === 'media' ? summary.durationMs : null,
+    ...(resource.schemaId === 'project.character_image' ? { purpose: 'identity' as const }
+      : resource.schemaId === 'project.location_image' ? { purpose: 'scene' as const }
+        : resource.schemaId === 'project.prop_image' ? { purpose: 'prop' as const } : {}),
   }
-}
-
-/**
- * Frame choices for a draft or edit: the model's accepted frames in the
- * project vocabulary order, defaulting to the project frame when the model
- * accepts it. No capability means no choice can be offered.
- */
-export function resolveCanvasAspectRatioChoices(
-  capability: CanvasGenerationCapability | null,
-  projectAspectRatio: string | null,
-): { readonly choices: readonly string[]; readonly defaultRatio: string | null } {
-  const choices = capability?.view.aspectRatios ?? []
-  const defaultRatio = projectAspectRatio && choices.includes(projectAspectRatio)
-    ? projectAspectRatio
-    : choices[0] ?? null
-  return { choices, defaultRatio }
 }
 
 export function canvasReferenceRole(reference: Pick<CanvasDraftReference, 'mediaType' | 'role' | 'durationMs'>): GenerationReferenceRole {
@@ -153,6 +141,7 @@ export function regenerationReferenceForCandidate(
     durationMs: candidate.durationMs,
     role,
     channel: candidate.mediaType === 'text' ? 'context' : candidate.mediaType,
+    ...(candidate.purpose ? { purpose: candidate.purpose } : {}),
   }
 }
 
@@ -179,6 +168,7 @@ export function formatCanvasParameterValue(value: CapabilityValue, t: CanvasDraf
 export function buildCanvasDraftMessage(input: {
   readonly composition: CanvasDraftComposition
   readonly folderPath: string | null
+  readonly projectAspectRatio?: string | null
   readonly t: CanvasDraftMessageTranslator
 }): string {
   const { composition, folderPath, t } = input
@@ -186,7 +176,7 @@ export function buildCanvasDraftMessage(input: {
   const lines: string[] = [
     t(composition.mediaType === 'image' ? 'message.imageIntro' : 'message.videoIntro', { brief }),
   ]
-  if (composition.aspectRatio) lines.push(t('message.aspectRatio', { ratio: composition.aspectRatio }))
+  if (composition.aspectRatio) lines.push(t(composition.aspectRatio === input.projectAspectRatio ? 'message.projectAspectRatio' : 'message.aspectRatio', { ratio: composition.aspectRatio }))
   for (const [field, value] of Object.entries(composition.parameters)) {
     lines.push(t('message.parameter', { field: t(`parameter.${field}`), value: formatCanvasParameterValue(value, t) }))
   }
@@ -197,7 +187,7 @@ export function buildCanvasDraftMessage(input: {
   if (composition.references.length > 0) {
     lines.push(t('message.referencesTitle'))
     for (const reference of composition.references) {
-      const role = t(`referenceRole.${reference.role}`)
+      const role = reference.purpose ? `${t(`referenceRole.${reference.role}`)} / ${t(`referencePurpose.${reference.purpose}`)}` : t(`referenceRole.${reference.role}`)
       lines.push(reference.mediaType === 'image'
         ? t('message.referenceAttached', { role, name: reference.name })
         : t('message.referencePath', { role, name: reference.name, path: reference.workspacePath }))

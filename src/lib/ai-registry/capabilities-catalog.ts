@@ -1,4 +1,5 @@
 import { composeModelKey, parseModelKeyStrict } from '@/lib/ai-registry/selection'
+import { COMPATIBLE_IMAGE_CAPABILITIES, compatibleImageCapabilityModelId } from '@/lib/ai-providers/openai-compatible/image-models'
 import {
   validateModelCapabilities,
   type CapabilitySelections,
@@ -130,7 +131,9 @@ function buildCapabilityCache(entries: BuiltinCapabilityCatalogEntry[], signatur
 
     const providerKey = getProviderKey(entry.provider)
     const fallbackKey = `${entry.modelType}::${providerKey}::${entry.modelId}`
-    if (!byProviderKey.has(fallbackKey)) {
+    // An instance-scoped contract must never become a default for other users
+    // or gateways sharing the same provider family and model name.
+    if (entry.provider === providerKey && !byProviderKey.has(fallbackKey)) {
       byProviderKey.set(fallbackKey, entry)
     }
   }
@@ -177,7 +180,9 @@ export function findBuiltinCapabilityCatalogEntry(
   }
 
   const providerKey = getProviderKey(provider)
-  const fallbackKey = `${modelType}::${providerKey}::${modelId}`
+  const capabilityModelId = modelType === 'image' && providerKey === 'openai-compatible'
+    ? compatibleImageCapabilityModelId(modelId) : modelId
+  const fallbackKey = `${modelType}::${providerKey}::${capabilityModelId}`
   const fallback = loaded.byProviderKey.get(fallbackKey)
   if (fallback) {
     return {
@@ -187,6 +192,9 @@ export function findBuiltinCapabilityCatalogEntry(
     }
   }
 
+  if (modelType === 'image' && providerKey === 'openai-compatible') {
+    return { modelType, provider: providerKey, modelId, capabilities: cloneCapabilities(COMPATIBLE_IMAGE_CAPABILITIES) }
+  }
   return null
 }
 

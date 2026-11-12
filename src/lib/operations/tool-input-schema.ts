@@ -158,7 +158,21 @@ function selectUnionBranchIndex(value: unknown, branches: readonly JsonValue[]):
     }
     return hasDiscriminator ? [index] : []
   })
-  return discriminatorMatches.length === 1 ? discriminatorMatches[0] ?? -1 : -1
+  if (discriminatorMatches.length === 1) return discriminatorMatches[0] ?? -1
+  // A malformed envelope can contain extra keys and still unambiguously
+  // identify its branch, e.g. { request: {...}, folderPath: ... }. Prefer a
+  // required key exclusive to one branch over errors from unrelated shapes.
+  const shapeMatches = branches.flatMap((branch, index) => {
+    if (!isRecord(branch)) return []
+    const exclusiveKeyPresent = readStringArray(branch.required).some((key) => (
+      Object.prototype.hasOwnProperty.call(value, key)
+      && branches.every((other, otherIndex) => (
+        otherIndex === index || !isRecord(other) || readProperties(other)[key] === undefined
+      ))
+    ))
+    return exclusiveKeyPresent ? [index] : []
+  })
+  return shapeMatches.length === 1 ? shapeMatches[0] ?? -1 : -1
 }
 
 function selectUnionBranch(value: unknown, schema: JsonObject): JsonValue | null {
@@ -296,6 +310,7 @@ export function normalizeProjectAgentToolInput(params: {
   const issues = expandProjectAgentToolInputIssues({
     input: correctionInput,
     toolInputSchema: params.toolInputSchema,
+    runtimeInputSchema: runtimeSchema,
     issues: rawIssues,
   })
   throw new ApiError('INVALID_PARAMS', {
@@ -424,9 +439,11 @@ function readSchemaNodeAtPath(params: {
 export function expandProjectAgentToolInputIssues(params: {
   input: unknown
   toolInputSchema: ProjectAgentToolInputSchema
+  /** Canonicalizer unions can accept durable forms omitted from the declaration. */
+  runtimeInputSchema?: JsonObject
   issues: unknown
 }): UnknownRecord[] {
-  const rootSchema = serializeToolInputSchema(params.toolInputSchema)
+  const rootSchema = params.runtimeInputSchema ?? serializeToolInputSchema(params.toolInputSchema)
   const expanded: UnknownRecord[] = []
 
   const visit = (issues: unknown, parentPath: readonly (string | number)[]): void => {
@@ -769,6 +786,13 @@ export function createProjectAgentToolInputSchema(params: {
 
   const rawJsonSchema = runtimeJsonSchema(params.inputSchema, params.operationId)
   const root = toJsonObject(rawJsonSchema, params.operationId)
+  // A top-level union has no root properties. Projecting only properties
+  // would silently publish {}, causing runtimes to discard every argument.
+  // Use an object envelope with a nested union in a tool canonicalizer.
+  if (root.type !== 'object' || !isRecord(root.properties)
+    || root.anyOf !== undefined || root.oneOf !== undefined || root.allOf !== undefined) {
+    throw new Error(`PROJECT_AGENT_TOOL_INPUT_SCHEMA_ROOT_OBJECT_REQUIRED:${params.operationId}`)
+  }
   const normalized = normalizeSchemaNode(root, false)
   const normalizedRoot = toJsonObject(normalized, params.operationId)
   const properties = readProperties(normalizedRoot)

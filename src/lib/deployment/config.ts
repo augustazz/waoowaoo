@@ -46,6 +46,20 @@ function readProviderCredentialMode(edition: DeploymentEdition): ProviderCredent
   return editionServer.providerCredentials.defaultMode
 }
 
+function readMediaObjectDelivery(edition: DeploymentEdition): MediaObjectDelivery {
+  const value = process.env.MEDIA_OBJECT_DELIVERY?.trim()
+  if (!value) return edition === 'cloud' ? 'signed-https' : 'authenticated-proxy'
+  if (value === 'authenticated-proxy' || value === 'signed-https') return value
+  throw new Error('MEDIA_OBJECT_DELIVERY_INVALID: expected authenticated-proxy or signed-https')
+}
+
+function readProviderMediaInputTransport(delivery: MediaObjectDelivery): ProviderMediaInputTransport {
+  const value = process.env.PROVIDER_MEDIA_INPUT_TRANSPORT?.trim()
+  if (!value) return delivery === 'signed-https' ? 'public-https' : 'inline-data-url'
+  if (value === 'inline-data-url' || value === 'public-https') return value
+  throw new Error('PROVIDER_MEDIA_INPUT_TRANSPORT_INVALID: expected inline-data-url or public-https')
+}
+
 export function getDeploymentConfig(): DeploymentConfig {
   const edition = readDeploymentEdition()
   if (edition !== compiledDeploymentEdition) {
@@ -58,11 +72,12 @@ export function getDeploymentConfig(): DeploymentConfig {
       `DEPLOYMENT_BINDING_CONTRACT_MISMATCH: manifest=${compiledDeploymentEdition} contract=${editionServer.edition}`,
     )
   }
+  const mediaObjectDelivery = readMediaObjectDelivery(edition)
   return {
     edition,
     providerCredentialMode: readProviderCredentialMode(edition),
-    mediaObjectDelivery: edition === 'cloud' ? 'signed-https' : 'authenticated-proxy',
-    providerMediaInputTransport: edition === 'cloud' ? 'public-https' : 'inline-data-url',
+    mediaObjectDelivery,
+    providerMediaInputTransport: readProviderMediaInputTransport(mediaObjectDelivery),
   }
 }
 

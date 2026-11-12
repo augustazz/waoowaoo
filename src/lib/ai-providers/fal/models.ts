@@ -72,13 +72,13 @@ export const FAL_BUILTIN_CAPABILITY_CATALOG_ENTRIES = [
     modelType: 'image',
     provider: 'fal',
     modelId: 'banana-2',
-    capabilities: { image: { resolutionOptions: ['1K', '2K', '4K'] } },
+    capabilities: { image: { maxReferenceImages: 14, resolutionOptions: ['1K', '2K', '4K'] } },
   },
   {
     modelType: 'image',
     provider: 'fal',
     modelId: FAL_GPT_IMAGE_2_MODEL_ID,
-    capabilities: { image: { resolutionOptions: [...FAL_IMAGE_RESOLUTIONS], qualityOptions: [...FAL_GPT_IMAGE_2_QUALITY_OPTIONS] } },
+    capabilities: { image: { maxReferenceImages: 16, resolutionOptions: [...FAL_IMAGE_RESOLUTIONS], qualityOptions: [...FAL_GPT_IMAGE_2_QUALITY_OPTIONS] } },
   },
   {
     modelType: 'music',
@@ -439,6 +439,11 @@ export const FAL_IMAGE_OPTION_SCHEMA_CONFIG = {
   },
 } satisfies MediaOptionSchemaConfig
 
+export function falImageReferenceLimit(modelId: string): number | undefined {
+  const entry = FAL_BUILTIN_CAPABILITY_CATALOG_ENTRIES.find((entry) => entry.modelType === 'image' && entry.modelId === modelId)
+  return entry && 'image' in entry.capabilities ? entry.capabilities.image.maxReferenceImages : undefined
+}
+
 export function resolveFalOptionSchema(modality: MediaModality, modelId: string): AiOptionSchema {
   if (modality === 'image') {
     if (modelId === FAL_GPT_IMAGE_2_MODEL_ID) {
@@ -447,6 +452,7 @@ export function resolveFalOptionSchema(modality: MediaModality, modelId: string)
         qualityOptions: FAL_GPT_IMAGE_2_QUALITY_OPTIONS,
         defaultResolution: '1K',
         defaultOutputFormat: 'png',
+        maxReferenceImages: falImageReferenceLimit(modelId),
         excludedKeys: ['keepOriginalAspectRatio', 'responseFormat'],
       })
     }
@@ -457,7 +463,7 @@ export function resolveFalOptionSchema(modality: MediaModality, modelId: string)
         resolution: enumValidator(FAL_IMAGE_RESOLUTIONS),
         aspectRatio: nonEmptyStringValidator(),
         outputFormat: enumValidator(IMAGE_OUTPUT_FORMAT_OPTIONS),
-        referenceImages: stringArrayValidator(),
+        referenceImages: stringArrayValidator({ maxLength: falImageReferenceLimit(modelId) ?? 0 }),
       },
       normalize: (options) => ({
         ...options,

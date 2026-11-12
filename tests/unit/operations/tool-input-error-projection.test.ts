@@ -27,6 +27,17 @@ const toolInputSchema = createProjectAgentToolInputSchema({
 })
 
 describe('Project Agent Tool input error projection', () => {
+  it('rejects a root union instead of silently publishing an empty parameter object', () => {
+    expect(() => createProjectAgentToolInputSchema({
+      operationId: 'root_union',
+      inputSchema: z.union([
+        z.object({ name: z.string() }).strict(),
+        z.object({ request: z.object({ kind: z.literal('retry'), resourceId: z.string() }).strict() }).strict(),
+      ]),
+    })).toThrow('PROJECT_AGENT_TOOL_INPUT_SCHEMA_ROOT_OBJECT_REQUIRED:root_union')
+    expect(createProjectAgentToolInputSchema({ operationId: 'empty', inputSchema: z.object({}).strict() }))
+      .toEqual({ type: 'object', properties: {}, required: [], additionalProperties: false })
+  })
   it('normalizes nullable transport fields before reporting the canonical leaf error', () => {
     try {
       normalizeProjectAgentToolInput({

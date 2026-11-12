@@ -22,6 +22,14 @@ export interface GenerationReferenceIssue {
   readonly inputMode?: VideoInputMode
 }
 
+export function imageReferenceCountIssue(maxImages: number | undefined, count: number): GenerationReferenceIssue | null {
+  if (count === 0) return null
+  const code = maxImages === undefined ? 'IMAGE_MODEL_REFERENCE_CAPABILITY_UNKNOWN'
+    : maxImages === 0 ? 'IMAGE_MODEL_REFERENCE_UNSUPPORTED'
+      : count > maxImages ? 'IMAGE_MODEL_REFERENCE_LIMIT_EXCEEDED' : null
+  return code ? { code, field: 'references', ...(maxImages === undefined ? {} : { limit: maxImages }) } : null
+}
+
 export function generationVideoInputMode(references: readonly GenerationReferenceRole[]): VideoInputMode {
   if (references.some((ref) => ref.role === 'last_frame' && ref.channel === 'image')) return 'first_last_frame'
   if (references.some((ref) => ref.role === 'first_frame' && ref.channel === 'image')) return 'first_frame'
@@ -42,8 +50,7 @@ export function validateGenerationReferences(input: {
   })
   if (input.mediaType === 'image') {
     if (media.some((ref) => ref.channel !== 'image')) return issue('IMAGE_REFERENCE_ROLE_INVALID')
-    return media.length > limits.maxReferenceImages
-      ? issue('IMAGE_MODEL_REFERENCE_LIMIT_EXCEEDED', limits.maxReferenceImages) : null
+    return imageReferenceCountIssue(limits.maxReferenceImages, media.length)
   }
   if (media.some((ref) => (
     ref.channel === 'image' ? !['first_frame', 'last_frame', 'reference_image'].includes(ref.role)

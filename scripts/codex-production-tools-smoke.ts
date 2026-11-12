@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { createWaoMcpServer } from '@/lib/wao-mcp/server'
+import { createWaoMcpToolRegistry } from '@/lib/wao-mcp/tool-registry'
 import { ensureAiCatalogsRegistered } from '@/lib/ai-exec/catalog-bootstrap'
 import { listBuiltinCapabilityCatalog } from '@/lib/ai-registry/capabilities-catalog'
 import { projectProductionCapabilities, type ProjectProductionContext } from '@/lib/project-production-context'
@@ -116,6 +117,30 @@ async function main() {
     await manager.ensure(scope, { ownerToken: 'probe', environment: { WAO_MCP_PROBE_TOKEN: 'not-a-provider-key' } })
     const initial = await manager.ensureThread(scope, { productThreadId: 'product-probe', runtimeThreadId: null, configuration: configuration() })
     const firstCapture = await probe('FIRST_NATIVE_HISTORY_MARKER')
+    const assertMergeDeclaration = (capture: unknown) => {
+      function find(value: unknown): Record<string, unknown> | null {
+        if (Array.isArray(value)) return value.map(find).find(Boolean) ?? null
+        if (!value || typeof value !== 'object') return null
+        const record = value as Record<string, unknown>
+        if (record.name === 'merge_videos' && record.parameters) return record
+        return Object.values(record).map(find).find(Boolean) ?? null
+      }
+      const declaration = find(capture)
+      assert(declaration, 'Actual direct merge_videos declaration required')
+      const parameters = declaration.parameters as { properties?: Record<string, unknown> }
+      assert.deepEqual(Object.keys(parameters.properties ?? {}), ['request'], 'Actual merge parameters must never be empty')
+      const marker = 'Canonical input JSON Schema (complete; use it if the runtime projection omits nested fields):\n'
+      const description = String(declaration.description ?? '')
+      assert(description.includes(marker), 'All assembly branches must survive the runtime array projection')
+      const canonical = JSON.parse(description.slice(description.indexOf(marker) + marker.length))
+      assert.deepEqual(canonical, createWaoMcpToolRegistry(context).find((tool) => tool.name === 'merge_videos')!.tool.inputSchema)
+      for (const field of ['new', 'retry', 'revise_failed', 'videos', 'resourceId', 'cover', 'videoIndex', 'offsetSeconds']) assert(JSON.stringify(canonical).includes(`"${field}"`))
+    }
+    assertMergeDeclaration(firstCapture)
+    const metadata = (firstCapture as { client_metadata: Record<string, string> }).client_metadata
+    const routing = JSON.parse(metadata['x-codex-turn-metadata']) as { code_mode_tool_names: Record<string, unknown> }
+    assert(!Object.keys(routing.code_mode_tool_names).some((name) => name.includes('mcp__wao')), 'Direct-only Wao tools must stay outside the exec index')
+    const firstCanonicalSchema = createWaoMcpToolRegistry(context).find((tool) => tool.name === 'create_video')!.tool.inputSchema
     const before = JSON.stringify(firstCapture)
     assert(before.includes('create_video'))
     assert(before.includes('resolution'))
@@ -124,6 +149,7 @@ async function main() {
     const resumed = await manager.ensureThread(scope, { productThreadId: 'product-probe', runtimeThreadId: initial.runtimeThreadId, configuration: configuration() })
     assert.equal(resumed.runtimeThreadId, initial.runtimeThreadId)
     const secondCapture = await probe('SECOND_NATIVE_HISTORY_MARKER')
+    assertMergeDeclaration(secondCapture)
     const after = JSON.stringify(secondCapture)
     assert(after.includes('create_video'))
     const toolsOnly = (value: unknown): unknown => {
@@ -133,7 +159,12 @@ async function main() {
         if (Array.isArray(candidate)) return candidate.map(find).find(Boolean)
         if (!candidate || typeof candidate !== 'object') return null
         const entry = candidate as Record<string, unknown>
-        if (entry.name === 'create_video' && entry.parameters) return entry.parameters
+        if (entry.name === 'create_video' && entry.parameters) {
+          const marker = 'Canonical input JSON Schema (complete; use it if the runtime projection omits nested fields):\n'
+          const description = typeof entry.description === 'string' ? entry.description : ''
+          assert(description.includes(marker), 'The actual direct declaration must retain the complete canonical input contract')
+          return JSON.parse(description.slice(description.indexOf(marker) + marker.length))
+        }
         return Object.values(entry).map(find).find(Boolean)
       }
       const result = find(record.input)
@@ -142,13 +173,15 @@ async function main() {
     }
     const firstTools = JSON.stringify(toolsOnly(firstCapture))
     const secondTools = JSON.stringify(toolsOnly(secondCapture))
+    assert.deepEqual(toolsOnly(firstCapture), firstCanonicalSchema)
+    assert.deepEqual(toolsOnly(secondCapture), createWaoMcpToolRegistry(context).find((tool) => tool.name === 'create_video')!.tool.inputSchema)
     assert(firstTools.includes('resolution'))
     assert(!secondTools.includes('resolution'), 'Fixed field must be absent in the real second Responses tool payload')
     const native = await manager.readThread(scope, 'product-probe', true)
     assert(JSON.stringify(native.raw).includes('FIRST_NATIVE_HISTORY_MARKER'))
     assert(JSON.stringify(native.raw).includes('SECOND_NATIVE_HISTORY_MARKER'))
     assert(discoveries >= 2)
-    console.log(JSON.stringify({ codex: ASSISTANT_RUNTIME_CODEX_VERSION, actualDiscoveryRefresh: true, fixedFieldHiddenInResponses: true, nativeThreadAndHistoryPreserved: true, externalProviderCalls: 0 }))
+    console.log(JSON.stringify({ codex: ASSISTANT_RUNTIME_CODEX_VERSION, actualDiscoveryRefresh: true, directWaoToolsOutsideExecIndex: true, completeCanonicalSchemaInDirectDeclaration: true, mergeRequestBranchesPreserved: true, fixedFieldHiddenInResponses: true, nativeThreadAndHistoryPreserved: true, externalProviderCalls: 0 }))
   } finally {
     await manager.shutdownAll()
     await Promise.all(transports.map((transport) => transport.close()))

@@ -9,13 +9,6 @@ import {
 /** URL query parameter that keeps the step visible across refreshes and links. */
 export const PRODUCTION_STEP_QUERY_PARAM = 'step'
 
-/**
- * Step view is the default: it answers "what did this step produce". The full
- * file tree stays available as a second projection of the same Resources.
- */
-export const PRODUCTION_CONTENT_VIEWS = ['step', 'files'] as const
-export type ProductionContentView = typeof PRODUCTION_CONTENT_VIEWS[number]
-
 const PRODUCTION_STEP_STORAGE_PREFIX = 'waoowaoo:workspace:last-step'
 
 export function productionStepStorageKey(projectId: string): string {

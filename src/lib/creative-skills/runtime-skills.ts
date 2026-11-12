@@ -51,21 +51,21 @@ export const CREATIVE_RUNTIME_SKILL_REGISTRY: Readonly<
     title: '资产范围与视觉设计',
     description: '筛选和设计生产资产，形成带最终图片提示词的 asset_generation_batch 专业结果。',
     skillIds: ['creative-core', 'asset-development'],
-    executionFacts: 'The image model is fixed in settings; omit model identity and obey the current create_image tool schema. Fill its exposed options; fixed parameters are absent and supplied by the server. Every asset includes its stable creative identity, complete final prompt and user-visible name. The server owns Resource placement.',
+    executionFacts: 'The image model is fixed in settings; omit model identity and obey the current create_image tool schema. Fill its exposed options; fixed parameters are absent and supplied by the server. Every asset includes its stable creative identity, complete final prompt and user-visible name. For multiple images, select style first, then construct only a singleton sample batch with count=1. Wait for the exact ready sample and explicit user acceptance before constructing a batch of only the remaining items. The server owns Resource placement.',
   }),
   video: defineRuntimeSkill({
     kind: 'video',
     title: '视频导演与生成设计',
     description: '完成视频导演、分段和最终视频提示词，形成 video_generation_batch 专业结果。',
     skillIds: ['creative-core', 'video-direction'],
-    executionFacts: 'The video model is fixed in settings; omit model identity and obey the current create_video tool schema’s duration and reference limits. Fill its exposed options; fixed parameters are absent and supplied by the server. Input mode is derived from reference roles. Never guess capability limits.',
+    executionFacts: 'The video model is fixed in settings; omit model identity and obey the current create_video tool schema’s duration and reference limits. Fill its exposed options; fixed parameters are absent and supplied by the server. Input mode is derived from reference roles. Never guess capability limits. Before the first video submission for a complete work over 15 seconds, read music-direction only for its score-decision checkpoint, reuse or obtain an explicit choice and record it in the canonical Direction sound policy. Keyframe images do not wait for this decision. Reading the checkpoint does not start audio production; actual cues wait for a ready edited full-video timeline and an authorized audio scope.',
   }),
   music: defineRuntimeSkill({
     kind: 'music',
     title: '音乐与配乐设计',
-    description: '从内容与真实时间线规划配乐窗口并创作 Composition Plan，形成 audio_generation_batch 专业结果。',
+    description: '完整作品首次视频提交前只确认配乐方向；成片真实时间线就绪且授权音频制作后，规划配乐窗口并创作 Composition Plan，形成 audio_generation_batch 专业结果。',
     skillIds: ['creative-core', 'music-direction'],
-    executionFacts: 'The music model is fixed in settings; omit model identity and obey the current create_audio tool schema’s Composition Plan limits. Plan duration is the sum of chunk durations; output format is fixed MP3. Never guess capability limits.',
+    executionFacts: 'Reading this Skill solely for the pre-video score decision does not require an audio_generation_batch or authorize create_audio. Reuse an explicitly confirmed direction for the same scope; cancellation, a missing answer or failure stays pending, never no_music. Generate cues only after an exact ready full edited video and its real duration are available as score_timeline, within the authorized audio/final-delivery scope. The music model is fixed in settings; omit model identity and obey the current create_audio tool schema’s Composition Plan limits. Plan duration is the sum of chunk durations; output format is fixed MP3. Never guess capability limits.',
   }),
 }
 
@@ -126,9 +126,9 @@ async function buildRuntimeSkill(skill: CreativeRuntimeSkillDefinition): Promise
     '',
     `# ${skill.title}`,
     '',
-    'Use this Skill only when the current request matches this professional domain.',
+    'Use this Skill only when the current request matches this professional domain or the current step explicitly requires reading its prerequisite checkpoint. Checkpoint-only reading does not start this domain\'s production step.',
     'You are the primary Wao Agent and the sole author of this professional result. This Skill owns only its declared domain and outputKind; complete this result from its contract instead of importing another domain method into it.',
-    `Construct exactly one object with outputKind=${JSON.stringify(skill.outputKind)} during this Turn. The object is the single professional result: use it directly in the response, pass its exact media items to the matching Wao Operation, or save it only when the user explicitly requests persistence.`,
+    `When authoring this domain's professional result, construct exactly one object with outputKind=${JSON.stringify(skill.outputKind)} during this Turn. The object is the single professional result: use it directly in the response, pass its exact media items to the matching Wao Operation, or save it only when the user explicitly requests persistence. Reading only a prerequisite checkpoint does not construct a professional object or authorize that domain's media generation.`,
     'Never invent project paths or Resource identities. Use only canonical Resource ids and versions supplied by Wao tools or current context. Runtime scratch has no delivery meaning.',
     skill.executionFacts,
     ...resources.map(({ definition, checksum, body }) => [

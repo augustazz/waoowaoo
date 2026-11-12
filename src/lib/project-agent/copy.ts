@@ -11,6 +11,7 @@ const PROJECT_AGENT_OPERATION_TITLE_COPY: Record<string, ProjectAgentOperationTi
   revise_project_document: { zh: '修订项目文档', en: 'Revise project document' },
   create_folder: { zh: '创建文件夹', en: 'Create folder' },
   create_image: { zh: '生成图片资源', en: 'Generate image resource' },
+  get_image_reference_plan: { zh: '推荐镜头参考图', en: 'Recommend shot image references' },
   create_audio: { zh: '生成音频资源', en: 'Generate audio resource' },
   create_video: { zh: '生成视频资源', en: 'Generate video resource' },
   merge_videos: { zh: '合并视频资源', en: 'Merge video resources' },

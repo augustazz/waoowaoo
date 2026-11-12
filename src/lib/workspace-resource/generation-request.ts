@@ -17,6 +17,8 @@ const resourceNameSchema = z.string().trim().min(1).max(300)
 const folderPathSchema = z.string().trim().min(1).max(512).nullable().optional()
   .describe('Optional project-relative destination folder path. Omit or use null for the project root; missing folders are created atomically with the output Resources.')
 
+export const imageReferencePurposeSchema = z.enum(['identity', 'scene', 'continuity', 'prop', 'style'])
+
 export const generationReferenceSchema = z.object({
   resourceId: z.string().trim().min(1).max(32)
     .describe('Canonical ready WorkspaceResource identity.'),
@@ -24,7 +26,24 @@ export const generationReferenceSchema = z.object({
     .describe('Exact immutable input version.'),
   role: z.string().trim().min(1).max(64),
   channel: z.enum(['context', 'image', 'audio', 'video']),
+  purpose: imageReferencePurposeSchema.optional().describe('Application-level image purpose; never a Provider role.'),
 }).strict().describe('One ordered reference. Array order is authoritative; the server assigns frozen internal positions.')
+
+const pinnedResourceSchema = z.object({
+  resourceId: z.string().trim().min(1).max(32),
+  contentVersion: z.number().int().positive(),
+}).strict()
+
+export const imageReferencePlanSchema = z.object({
+  shotId: z.string().trim().min(1).max(512),
+  references: z.array(generationReferenceSchema.extend({
+    channel: z.literal('image'),
+    role: z.literal('reference_image'),
+    purpose: imageReferencePurposeSchema,
+  }).strict()).max(16),
+  direction: pinnedResourceSchema.optional().describe('Adopted Creative Direction document and exact version, for provenance only.'),
+  sourcePlan: pinnedResourceSchema.optional().describe('Optional exact storyboard/plan document version.'),
+}).strict().describe('Persisted shot-to-asset recipe. Ordered references are attached automatically; finalize Prompt image numbers in this exact order. Only include accepted assets and same-scene continuity. Never reference pending batch outputs.')
 
 export const videoGenerationReferenceSchema = z.discriminatedUnion('channel', [
   generationReferenceSchema.extend({
@@ -45,23 +64,22 @@ export const videoGenerationReferenceSchema = z.discriminatedUnion('channel', [
 ])
 
 /**
- * Per-item frame ratio. Omitted means the project frame owner resolves it;
- * the value set is the same project frame vocabulary, never a free string.
+ * Shared frame vocabulary for project settings and frozen generation metadata.
  */
 export const generationAspectRatioSchema = z.string().trim()
   .refine((value) => Object.prototype.hasOwnProperty.call(ASPECT_RATIO_CONFIGS, value), {
     message: `aspectRatio must be one of ${Object.keys(ASPECT_RATIO_CONFIGS).join(', ')}.`,
   })
-  .describe('Optional W:H frame ratio for this item. Omit to use the project frame. Fixed-format asset images (character/location/prop) must omit it.')
+  .describe('W:H frame ratio in the project frame vocabulary.')
 
 const imageParametersSchema = z.object({
-  aspectRatio: generationAspectRatioSchema.optional(),
+  aspectRatio: generationAspectRatioSchema.optional().describe('Legacy input only; ignored for new generation. The project frame is authoritative. Omit this field.'),
   resolution: z.string().trim().min(1).optional(),
   quality: z.string().trim().min(1).optional(),
 }).strict()
 
 const videoParametersSchema = z.object({
-  aspectRatio: generationAspectRatioSchema.optional(),
+  aspectRatio: generationAspectRatioSchema.optional().describe('Legacy input only; ignored for new generation. The project frame is authoritative. Omit this field.'),
   resolution: z.string().trim().min(1).optional(),
   generateAudio: z.boolean().optional(),
 }).strict()
@@ -93,6 +111,9 @@ export const imageGenerationItemSchema = z.object({
   aliases: textList(64, 300).optional(),
   stableDescription: z.string().trim().min(1).max(16_000).optional(),
   consumedByShots: textList(512, 512).optional(),
+  shotId: z.string().trim().min(1).max(512).optional().describe('Exact shot identifier, used to recommend assets explicitly marked consumedByShots; never matched by filename.'),
+  referencePlan: imageReferencePlanSchema.optional(),
+  referenceMode: z.enum(['images', 'text_only']).optional().describe('Use text_only only after disclosing missing/unsupported references. It cannot silently discard supplied image references.'),
 }).strict().superRefine((item, context) => {
   const expectedSchema = item.assetKind === 'character'
     ? WORKSPACE_RESOURCE_SCHEMA.CHARACTER_IMAGE
@@ -111,9 +132,6 @@ export const imageGenerationItemSchema = z.object({
   ]
   if (item.assetKind === null && assetSchemaIds.includes(item.schemaId)) {
     context.addIssue({ code: 'custom', path: ['assetKind'], message: 'assetKind is required for a reusable asset image schema.' })
-  }
-  if (item.assetKind !== null && item.options?.aspectRatio !== undefined) {
-    context.addIssue({ code: 'custom', path: ['options', 'aspectRatio'], message: 'Asset images use the fixed asset format; omit aspectRatio.' })
   }
 })
 

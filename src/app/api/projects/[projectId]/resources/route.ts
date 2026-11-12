@@ -5,6 +5,10 @@ import {
   WORKSPACE_RESOURCE_TREE_SCOPES,
   type WorkspaceResourceTreeScope,
 } from '@/lib/workspace-resource/contracts'
+import {
+  isProductionStageKey,
+  type ProductionStageKey,
+} from '@/lib/workspace-resource/production-stages'
 import { listWorkspaceResourceTreePage } from '@/lib/workspace-resource/view-service'
 
 function parseLimit(value: string | null): number | undefined {
@@ -23,6 +27,12 @@ function parseScope(value: string | null): WorkspaceResourceTreeScope | undefine
   return scope
 }
 
+function parseStep(value: string | null): ProductionStageKey | undefined {
+  if (value === null) return undefined
+  if (!isProductionStageKey(value)) throw new ApiError('INVALID_PARAMS', { field: 'step' })
+  return value
+}
+
 export const GET = apiHandler(async (
   request: NextRequest,
   context: { params: Promise<{ projectId: string }> },
@@ -37,8 +47,10 @@ export const GET = apiHandler(async (
     search: request.nextUrl.searchParams.get('search'),
     cursor: request.nextUrl.searchParams.get('cursor'),
     limit: parseLimit(request.nextUrl.searchParams.get('limit')),
+    includeDisabled: request.nextUrl.searchParams.get('includeDisabled') === 'true',
     deleted: request.nextUrl.searchParams.get('deleted') === 'true',
     scope: parseScope(request.nextUrl.searchParams.get('scope')),
+    step: parseStep(request.nextUrl.searchParams.get('step')),
   })
   return NextResponse.json({ success: true, page })
 })

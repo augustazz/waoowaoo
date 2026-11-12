@@ -2,8 +2,6 @@
   "title": "What do you want to make",
   "subtitle": "one line is enough — it takes it from there…",
   "inputPlaceholder": "e.g. A courier finds a phone that talks back…",
-  "aspectRatio": "Aspect ratio",
-  "aspectRatioCurrent": "Aspect ratio: {ratio}",
   "defaultProjectName": "New Project {timestamp}",
   "createFailed": "Failed to create project. Please try again.",
   "projectsLoadFailed": "Failed to load recent projects. Please retry.",

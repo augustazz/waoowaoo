@@ -12,7 +12,7 @@ interface AssetImageFormatPolicy {
   readonly aspectRatio: typeof ASSET_IMAGE_ASPECT_RATIO
 }
 
-/** Canvas presentation metadata only. Production prompts and parameters come from the authored manifest. */
+/** Legacy Canvas fallback when neither frozen media facts nor a project frame exist. Never a generation constraint. */
 export const ASSET_IMAGE_FORMAT_POLICIES = {
   character: {
     kind: 'character',

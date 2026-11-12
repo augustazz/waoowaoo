@@ -38,7 +38,7 @@ function ResourcePreviewBody({ card }: { readonly card: WorkspaceResourceCardMem
       return <img src={summary.url} alt={card.resource.name} className="max-h-[68vh] w-full rounded-2xl object-contain" />
     }
     if (summary.mediaType === 'video') {
-      return <video src={summary.url} controls autoPlay className="max-h-[68vh] w-full rounded-2xl bg-black object-contain" />
+      return <video src={summary.url} poster={summary.posterUrl ?? undefined} controls autoPlay className="max-h-[68vh] w-full rounded-2xl bg-black object-contain" />
     }
     if (summary.mediaType === 'audio') {
       return (

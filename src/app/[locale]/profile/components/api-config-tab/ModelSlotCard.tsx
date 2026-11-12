@@ -55,6 +55,8 @@ export function ModelSlotCard(props: ModelSlotCardProps) {
             provider: option.provider,
             providerName: option.providerName,
             groupNote: option.providerHasKey ? undefined : t('notConfigured'),
+            disabled: Boolean(option.videoUnavailableReason),
+            note: option.videoUnavailableReason ? t(`videoAvailability.${option.videoUnavailableReason}`) : undefined,
           }))}
           value={selection.modelKey || undefined}
           onModelChange={(modelKey) => props.onSelect(type, modelKey)}
@@ -87,6 +89,14 @@ export function ModelSlotCard(props: ModelSlotCardProps) {
       )}
       {selection.ambiguous && (
         <p className="text-xs text-[var(--glass-tone-warning-fg)]">{t('modelSelectionRequiredHint')}</p>
+      )}
+      {type === 'video' && selection.modelKey && (
+        <p className="text-xs text-[var(--glass-text-tertiary)]">{t('videoModelChangeHint')}</p>
+      )}
+      {options.find((option) => option.modelKey === selection.modelKey)?.videoUnavailableReason && (
+        <p role="alert" className="text-xs text-[var(--glass-tone-warning-fg)]">
+          {t(`videoAvailability.${options.find((option) => option.modelKey === selection.modelKey)!.videoUnavailableReason}`)}
+        </p>
       )}
     </section>
   )

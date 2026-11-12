@@ -70,8 +70,8 @@ export function resolveStorageSettingsInput(
 }
 
 export async function verifyStorageSettings(settings: StorageRuntimeSettings): Promise<void> {
-  const { mediaObjectDelivery } = getDeploymentConfig()
-  const provider = new S3StorageProvider(toS3StorageConfig(settings, mediaObjectDelivery))
+  const { mediaObjectDelivery, providerMediaInputTransport } = getDeploymentConfig()
+  const provider = new S3StorageProvider(toS3StorageConfig(settings, mediaObjectDelivery, providerMediaInputTransport))
   await provider.verifyReady()
 }
 

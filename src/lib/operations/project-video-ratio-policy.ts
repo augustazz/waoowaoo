@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { ApiError } from '@/lib/api-errors'
 import { ASPECT_RATIO_CONFIGS } from '@/lib/constants'
+import { resolveProjectVideoRatio } from '@/lib/projects/video-ratio'
 import { prisma } from '@/lib/prisma'
 import { GLOBAL_ASSET_PROJECT_ID } from '@/lib/workspace-resource/resource-impact'
 import type { OperationPlan } from './plan-contract'
@@ -19,20 +20,7 @@ export const projectVideoRatioSnapshotSchema = z.object({
 export type ProjectVideoRatioSnapshot = z.infer<typeof projectVideoRatioSnapshotSchema>
 
 export function requireProjectVideoRatio(value: string | null | undefined): ProjectVideoRatioSnapshot {
-  const videoRatio = value?.trim() || null
-  if (!videoRatio) {
-    throw new ApiError('INVALID_PARAMS', {
-      code: 'PROJECT_VIDEO_RATIO_REQUIRED',
-      field: 'videoRatio',
-      allowedValues: Object.keys(ASPECT_RATIO_CONFIGS),
-      correction: {
-        interaction: 'codex_request_user_input',
-        commitmentOperationId: 'update_project_config',
-        commitmentInputField: 'videoRatio',
-      },
-      agentRetryableAfterCorrection: true,
-    })
-  }
+  const videoRatio = resolveProjectVideoRatio(value).trim()
   if (!Object.prototype.hasOwnProperty.call(ASPECT_RATIO_CONFIGS, videoRatio)) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'PROJECT_VIDEO_RATIO_INVALID',

@@ -1,6 +1,7 @@
 import type { UnifiedModelType } from '@/lib/ai-registry/types'
 
 export interface DiscoveredProviderModel {
+  videoAvailability?: import('@/lib/ai-registry/video-availability').VideoModelAvailability
   id: string
   name: string
   types: UnifiedModelType[]
@@ -34,6 +35,7 @@ function classifyMetadata(model: Record<string, unknown>): UnifiedModelType[] {
 function classifyName(id: string): UnifiedModelType[] {
   if (/(?:gpt-image|chatgpt-image|grok-imagine-image|dall-e|flux|imagen|stable-diffusion|sdxl|seedream|nano-banana|qwen-image|ideogram|hunyuan-image|gemini.*(?:image|banana))/i.test(id)) return ['image']
   if (/grok-imagine-video/i.test(id)) return ['video']
+  if (/(?:seedance|TTseadanco)/i.test(id)) return ['video']
   if (/(?:^|[-_/.])(?:sora|veo|kling|wan|seedance|hailuo|runway)(?:[-_/.\d]|$)/i.test(id)) return ['video']
   if (/(?:^|[-_/.])(?:tts|speech|voice)(?:[-_/.\d]|$)/i.test(id)) return ['voice']
   if (/(?:^|[-_/.])(?:suno|udio|lyria|music)(?:[-_/.\d]|$)/i.test(id)) return ['music']

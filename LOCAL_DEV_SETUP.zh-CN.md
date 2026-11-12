@@ -6,6 +6,8 @@
 > 适用场景：源码方式本地开发，即 `npm run dev` → `scripts/dev-docker.sh` →
 > `http://localhost:3001`。
 > 生产/自托管部署请看 [`docs/INSTALL.md`](docs/INSTALL.md)。
+> 多设备协同部署（哪些组件放本地、哪些改远程）请看
+> [`MULTI_DEVICE_SETUP.zh-CN.md`](MULTI_DEVICE_SETUP.zh-CN.md)。
 
 ---
 

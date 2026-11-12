@@ -1,5 +1,7 @@
 'use client'
 
+import { DEFAULT_PROJECT_VIDEO_RATIO } from '@/lib/projects/video-ratio'
+
 /**
  * 首页 - 创作中心
  * 用户登录后的主入口页面：快速创作 + 最近项目
@@ -12,7 +14,6 @@ import { BrandPageLoading } from '@/components/ui/BrandLoading'
 import { AppIcon, IconGradientDefs } from '@/components/ui/icons'
 import StoryInputComposer from '@/components/story-input/StoryInputComposer'
 import TypewriterHero from '@/components/home/TypewriterHero'
-import HomeVideoRatioSelect from '@/components/home/HomeVideoRatioSelect'
 import {
   PendingMediaFileChips,
   TextAttachmentChips,
@@ -41,7 +42,6 @@ import {
   isProjectAssistantMediaFile,
   validateProjectAssistantMediaAttachmentFile,
 } from '@/lib/project-agent/media-attachments/client'
-import type { ProjectVideoRatio } from '@/lib/projects/video-ratio'
 import { readClientApiError } from '@/lib/errors/client'
 import { useClientErrorMessage } from '@/hooks/useClientErrorMessage'
 import { useToast } from '@/contexts/ToastContext'
@@ -80,7 +80,6 @@ export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [inputValue, setInputValue] = useState('')
-  const [videoRatio, setVideoRatio] = useState<ProjectVideoRatio>('16:9')
   const [attachments, setAttachments] = useState<ProjectAssistantTextAttachment[]>([])
   const [pendingMediaFiles, setPendingMediaFiles] = useState<PendingHomeMediaFile[]>([])
   const [attachUploading, setAttachUploading] = useState(false)
@@ -135,7 +134,7 @@ export default function HomePage() {
   const handleCreate = async () => {
     await submitHomeQuickStartLaunch({
       inputValue,
-      videoRatio,
+      videoRatio: DEFAULT_PROJECT_VIDEO_RATIO,
       attachments,
       mediaFiles: pendingMediaFiles.map((pending) => pending.file),
       isSubmitting: createLoading,
@@ -500,14 +499,6 @@ export default function HomePage() {
                   >
                     <AppIcon name="plus" className="h-[18px] w-[18px]" />
                   </button>
-                  <HomeVideoRatioSelect
-                    value={videoRatio}
-                    disabled={createLoading}
-                    onChange={(nextRatio) => {
-                      setVideoRatio(nextRatio)
-                      if (createError) setCreateError(null)
-                    }}
-                  />
                 </div>
               )}
               footer={attachments.length > 0 || pendingMediaFiles.length > 0 || attachUploading || attachError || createError ? (

@@ -38,6 +38,8 @@
   "OPERATION_IDEMPOTENCY_KEY_REQUIRED": "操作缺少稳定的请求标识，请重新发起。",
   "OPERATION_IDEMPOTENCY_KEY_INVALID": "请求标识无效，请重新发起操作。",
   "OPERATION_PLAN_REQUEST_REPLAY_DIVERGED": "这个请求标识已用于另一份生成计划，请重新发起操作。",
+  "WORKSPACE_RESOURCE_DISABLED": "此素材已停用，请先在素材详情中恢复使用，或选择其他素材。",
+  "WORKSPACE_RESOURCE_WORKFLOW_BUSY": "素材仍在生成中，请完成后再修改使用状态。",
   "WORKSPACE_RESOURCE_RETRY_TARGET_NOT_FOUND": "找不到要重试的失败素材。",
   "WORKSPACE_RESOURCE_RETRY_TARGET_DUPLICATE": "同一个素材不能重复选择。",
   "WORKSPACE_RESOURCE_RETRY_TARGET_INVALID": "该素材当前不能重试，请刷新后再检查。",

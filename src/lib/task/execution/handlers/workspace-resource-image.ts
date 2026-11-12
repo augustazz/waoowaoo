@@ -4,6 +4,8 @@ import {
 } from '@/lib/workspace-resource/generation-contract'
 import { ensureMediaObjectFromStorageKey } from '@/lib/media/service'
 import { resolveWorkspaceResourceInputMedia } from '@/lib/workspace-resource/input-media'
+import { AppError } from '@/lib/errors/app-error'
+import { augmentFailureRecord } from '@/lib/errors/failure'
 import { reportTaskProgress } from '../progress'
 import type { TaskExecutionContext } from '../context'
 import {
@@ -41,6 +43,10 @@ async function loadImageReferences(
     projectId: context.data.projectId,
     references: imageInputs,
     expectedMediaType: 'image',
+  }).catch((cause: unknown) => {
+    throw new AppError('INVALID_PARAMS', 'IMAGE_REFERENCE_READ_FAILED', {
+      cause, details: { reasonCode: 'IMAGE_REFERENCE_READ_FAILED', references: imageInputs.map(({ resourceId, contentVersion, position }) => ({ resourceId, contentVersion, position })) },
+    })
   })
   return resources.map((resource) => resource.storageKey)
 }
@@ -73,6 +79,17 @@ export async function handleWorkspaceResourceImageTask(
       ...frozenImageOptions(payload.generationOptions),
       ...(referenceImages.length > 0 ? { referenceImages } : {}),
     },
+  }).catch((error: unknown) => {
+    if (!(error instanceof AppError) || error.details?.reasonCode !== 'IMAGE_REFERENCE_READ_FAILED') throw error
+    const index = typeof error.details?.referenceIndex === 'number' ? error.details.referenceIndex - 1 : -1
+    const position = payload.resource.imageInputPositions[index]
+    const reference = payload.resource.inputs.find((input) => input.position === position)
+    throw AppError.fromFailure(augmentFailureRecord(error.failure, {
+      details: {
+        ...(reference ? { resourceId: reference.resourceId, contentVersion: reference.contentVersion } : {}),
+        referenceIndex: index + 1,
+      },
+    }), error)
   })
   const providerRoute = await requireTaskProviderRouteSelection(
     context,
@@ -91,5 +108,10 @@ export async function handleWorkspaceResourceImageTask(
     storageKey: media.storageKey,
     modelKey: providerRoute.modelKey,
     provider: providerRoute.provider,
+    imageReferences: payload.resource.imageInputPositions.map((position) => {
+      const reference = payload.resource.inputs.find((input) => input.position === position)!
+      return { resourceId: reference.resourceId, contentVersion: reference.contentVersion, position,
+        ...(reference.purpose ? { purpose: reference.purpose } : {}) }
+    }),
   }
 }

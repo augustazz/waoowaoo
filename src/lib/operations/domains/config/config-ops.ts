@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
+import { resolveProjectVideoRatio } from '@/lib/projects/video-ratio'
 import { logProjectAction } from '@/lib/logging/semantic'
 import type { ProjectAgentOperationRegistryDraft } from '@/lib/operations/types'
 import { defineOperation } from '@/lib/operations/define-operation'
@@ -27,10 +28,12 @@ export function createConfigOperations(): ProjectAgentOperationRegistryDraft {
       },
       inputSchema: z.object({}).strict(),
       outputSchema: z.object({ videoRatio: z.string().nullable() }).strict(),
-      execute: async (ctx) => await prisma.project.findUniqueOrThrow({
-        where: { id: ctx.projectId },
-        select: { videoRatio: true },
-      }),
+      execute: async (ctx) => {
+        const project = await prisma.project.findUniqueOrThrow({
+          where: { id: ctx.projectId }, select: { videoRatio: true },
+        })
+        return { videoRatio: resolveProjectVideoRatio(project.videoRatio) }
+      },
     }),
     update_project_config: defineOperation({
       id: 'update_project_config',

@@ -4,6 +4,7 @@ import { canvasGenerationFormIssues, canvasEditableParameters } from '../create/
 import { canvasReferenceIssue, type CanvasGenerationCapability } from '../create/canvas-draft'
 
 import { useCallback, useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import type { WorkspaceResourceInputSummary } from '@/lib/workspace-resource/contracts'
 import type {
   WorkspaceResourceRegenerationEdits,
@@ -13,15 +14,7 @@ import type {
 } from '@/lib/workspace-resource/regeneration'
 
 function referenceKey(reference: WorkspaceResourceRegenerationReference): string {
-  return `${reference.resourceId}:${String(reference.contentVersion)}:${reference.role}`
-}
-
-function sameReferences(
-  left: readonly WorkspaceResourceRegenerationReference[],
-  right: readonly WorkspaceResourceRegenerationReference[],
-): boolean {
-  return left.length === right.length
-    && left.every((reference, index) => referenceKey(reference) === referenceKey(right[index]))
+  return `${reference.resourceId}:${String(reference.contentVersion)}:${reference.role}:${reference.channel}:${reference.purpose ?? ''}`
 }
 
 /**
@@ -29,11 +22,24 @@ function sameReferences(
  * keys the owning component by Resource identity, so a new selection starts
  * from that Resource's frozen facts instead of carrying edits across cards.
  */
-export function useWorkspaceNodeGenerationEdits(template: WorkspaceResourceRegenerationTemplate | null, capability: CanvasGenerationCapability | null, inputSummaries: readonly WorkspaceResourceInputSummary[]) {
+export function useWorkspaceNodeGenerationEdits(template: WorkspaceResourceRegenerationTemplate | null, capability: CanvasGenerationCapability | null, inputSummaries: readonly WorkspaceResourceInputSummary[], projectAspectRatio: string | null) {
+  const t = useTranslations('projectWorkflow.canvas.workspace.details.editor')
   const [configurationVersion, setConfigurationVersion] = useState(capability?.view.configurationVersion ?? null)
+  // Opening a card may precede the first capability response. Capture that
+  // first version without treating initial loading as a configuration change;
+  // later versions still require an explicit review and preserve user edits.
+  if (configurationVersion === null && capability) {
+    setConfigurationVersion(capability.view.configurationVersion)
+  }
   const [prompt, setPrompt] = useState(template?.prompt ?? '')
-  const [name, setName] = useState('')
-  const [aspectRatio, setAspectRatio] = useState<string | null>(template?.aspectRatio ?? null)
+  const templateName = template?.name
+  const defaultName = useMemo(() => templateName ? t('newVersionName', {
+    name: templateName.slice(0, 48),
+    time: new Date().toISOString().replace('T', ' ').slice(0, 23),
+  }) : '', [templateName, t])
+  const [nameOverride, setName] = useState<string | null>(null)
+  const name = nameOverride ?? defaultName
+  const aspectRatio = projectAspectRatio
   const [durationSeconds, setDurationSeconds] = useState<number | null>(template?.durationSeconds ?? null)
   const [parameters, setParameters] = useState<WorkspaceResourceRegenerationParameters>(template?.parameters ?? {})
   const [references, setReferences] = useState<readonly WorkspaceResourceRegenerationReference[]>(() => (template?.references ?? []).map((reference) => ({ ...reference, durationMs: inputSummaries.find((input) => input.resourceId === reference.resourceId && input.contentVersion === reference.contentVersion)?.durationMs ?? null })))
@@ -71,13 +77,6 @@ export function useWorkspaceNodeGenerationEdits(template: WorkspaceResourceRegen
     durationSeconds,
     references,
   }), [aspectRatio, capability, durationSeconds, name, parameters, prompt, references])
-  const dirty = template !== null && (
-    edits.prompt !== template.prompt.trim()
-    || edits.aspectRatio !== template.aspectRatio
-    || edits.durationSeconds !== template.durationSeconds
-    || JSON.stringify(edits.parameters) !== JSON.stringify(template.parameters)
-    || !sameReferences(edits.references, template.references)
-  )
   const issues = canvasGenerationFormIssues(capability, { ...edits, configurationVersion })
   const valid = template !== null && edits.name.length > 0 && edits.name !== template.name
     && edits.prompt.length > 0 && issues.length === 0
@@ -92,14 +91,12 @@ export function useWorkspaceNodeGenerationEdits(template: WorkspaceResourceRegen
     configurationVersion,
     issues,
     reviewConfiguration,
-    dirty,
     valid,
     prompt,
     setPrompt,
     name,
     setName,
     aspectRatio,
-    setAspectRatio,
     durationSeconds,
     setDurationSeconds,
     parameters,

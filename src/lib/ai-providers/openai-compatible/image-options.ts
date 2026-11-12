@@ -8,3 +8,7 @@ export const GROK_IMAGE_ASPECT_RATIOS = [
 export function isGrokImagineImageModel(modelId: string): boolean {
   return /(?:^|\/)grok-imagine-image(?:[-.][\w.-]+)?$/iu.test(modelId)
 }
+
+export function isGptImage2Model(modelId: string): boolean {
+  return /(?:^|\/)gpt-image-2(?:-\d{4}-\d{2}-\d{2})?$/iu.test(modelId)
+}

@@ -286,6 +286,8 @@ export interface VideoCapabilities {
   maxReferenceVideoDurationMs?: number
   minTotalReferenceVideoDurationMs?: number
   maxTotalReferenceVideoDurationMs?: number
+  /** Combined duration of reference video inputs and generated output. */
+  maxReferenceVideoAndOutputDurationMs?: number
   referenceVideoMimeTypes?: string[]
   maxTotalReferenceVideoBytes?: number
   fieldI18n?: CapabilityFieldI18nMap
@@ -390,6 +392,7 @@ const VIDEO_ALLOWED_FIELDS = new Set<keyof VideoCapabilities>([
   'maxReferenceVideoDurationMs',
   'minTotalReferenceVideoDurationMs',
   'maxTotalReferenceVideoDurationMs',
+  'maxReferenceVideoAndOutputDurationMs',
   'referenceVideoMimeTypes',
   'maxTotalReferenceVideoBytes',
   'fieldI18n',
@@ -832,7 +835,7 @@ function validateVideoCapabilities(issues: CapabilityValidationIssue[], raw: unk
 
   for (const field of [
     'minReferenceAudioDurationMs', 'maxReferenceAudioDurationMs', 'maxTotalReferenceAudioDurationMs',
-    'minReferenceVideoDurationMs', 'maxReferenceVideoDurationMs', 'minTotalReferenceVideoDurationMs', 'maxTotalReferenceVideoDurationMs',
+    'minReferenceVideoDurationMs', 'maxReferenceVideoDurationMs', 'minTotalReferenceVideoDurationMs', 'maxTotalReferenceVideoDurationMs', 'maxReferenceVideoAndOutputDurationMs',
     'maxTotalReferenceVideoBytes',
   ] as const) {
     const value = raw[field]

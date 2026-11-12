@@ -8,6 +8,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { resolveProjectVideoRatio } from '@/lib/projects/video-ratio'
 import {
   type CapabilitySelections,
   type CapabilityValue,
@@ -123,7 +124,7 @@ export async function getProjectModelConfig(
   if (isPlatformProviderCredentialMode(deployment)) {
     const projectData = await projectDataPromise
     return {
-      videoRatio: projectData?.videoRatio ?? null,
+      videoRatio: resolveProjectVideoRatio(projectData?.videoRatio),
       capabilityDefaults: editionAi.readFixedParameters(),
     }
   }
@@ -137,7 +138,7 @@ export async function getProjectModelConfig(
   ])
 
   return {
-    videoRatio: projectData?.videoRatio ?? null,
+    videoRatio: resolveProjectVideoRatio(projectData?.videoRatio),
     capabilityDefaults: parseStoredCapabilitySelections(userPref?.capabilityDefaults, 'capabilityDefaults'),
   }
 }

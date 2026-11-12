@@ -71,7 +71,10 @@ export function CanvasDraftReferencePicker({ projectId, folderPath, capability, 
     event.stopPropagation()
     upload(Array.from(event.dataTransfer.files))
   }
-  const candidates = query.data?.pages.flatMap((page) => page.items).flatMap((resource) => {
+  const assetPriority: Record<string, number> = { 'project.character_image': 0, 'project.location_image': 1, 'project.prop_image': 2 }
+  const candidates = query.data?.pages.flatMap((page) => page.items)
+    .sort((a, b) => (assetPriority[a.schemaId] ?? 3) - (assetPriority[b.schemaId] ?? 3))
+    .flatMap((resource) => {
     const candidate = candidateFor(resource)
     return candidate && canAdd(candidate) ? [candidate] : []
   }) ?? []
@@ -87,7 +90,7 @@ export function CanvasDraftReferencePicker({ projectId, folderPath, capability, 
       }} />
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" className="glass-btn-base glass-btn-secondary px-3 py-2 text-xs" disabled={busy || allowedTypes.length === 0} onClick={() => input.current?.click()}>{t('uploadReference')}</button>
-        <button type="button" className="glass-btn-base glass-btn-secondary px-3 py-2 text-xs" disabled={busy || !capability} onClick={() => setOpen(true)}>{t('chooseProjectReference')}</button>
+        <button type="button" className="glass-btn-base glass-btn-secondary px-3 py-2 text-xs" disabled={busy || !capability || allowedTypes.length === 0} onClick={() => setOpen(true)}>{t('chooseProjectReference')}</button>
       </div>
       <p className="mt-2 rounded-xl border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">{t('referencesHint')}</p>
       {busy ? <p role="status" className="mt-2 text-xs text-slate-500">{t('referenceLoading')}</p> : null}
@@ -95,10 +98,11 @@ export function CanvasDraftReferencePicker({ projectId, folderPath, capability, 
       {pending.isError && pendingId ? <button type="button" className="text-xs text-red-600" onClick={() => { setPendingId(null); setNotice(t('referenceReadFailed')) }}>{t('referenceReadFailed')}</button> : null}
       <CanvasUploadQueue items={queue.items} onRetry={(item) => { if (!busy) queue.retry(item) }} onDismiss={queue.dismiss} />
       <GlassModalShell open={open} onClose={() => setOpen(false)} title={t('chooseProjectReference')}>
+        <p className="mb-2 text-xs text-slate-500">{t('selectedReferenceCount', { count: references.filter((reference) => reference.mediaType === 'image').length, limit: capability?.view.maxReferenceImages ?? 0 })}</p>
         <input className="mb-3 w-full rounded-lg border p-2 text-sm" aria-label={t('searchReferences')} placeholder={t('searchReferences')} value={search} onChange={(event) => setSearch(event.target.value)} />
         <div className="max-h-[50vh] space-y-2 overflow-y-auto">
           {query.isError ? <p role="alert">{t('referenceReadFailed')}</p> : query.isPending ? <p>{t('referenceLoading')}</p> : candidates.length === 0 ? <p className="text-sm text-slate-500">{t('noCompatibleReferences')}</p> : candidates.map((candidate) => (
-            <button key={candidate.resourceId} type="button" className="flex w-full items-center gap-3 rounded-lg border p-2 text-left hover:bg-slate-50" onClick={() => { setNotice(onAdd(candidate) ? null : t('referenceRejected')); setOpen(false) }}>
+            <button key={candidate.resourceId} type="button" className="flex w-full items-center gap-3 rounded-lg border p-2 text-left hover:bg-slate-50" onClick={() => { setNotice(onAdd(candidate) ? null : t('referenceRejected')) }}>
               {candidate.mediaType === 'image' && candidate.previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- Resource previews already use the canonical media route.
                 <img src={candidate.previewUrl} alt="" className="h-12 w-12 rounded object-cover" />

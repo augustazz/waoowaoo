@@ -107,7 +107,19 @@ services:
       temporal-dev-route:
         condition: service_completed_successfully
         required: false
-    command: ["sh", "-c", "npm run storage:init && exec npm run dev:next"]
+    # Host bind mounts can miss filesystem events for nested API routes.
+    # Polling keeps the development router's file list complete after reloads.
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        export WATCHPACK_POLLING="$${WATCHPACK_POLLING:-1000}"
+        # Each long-lived service can retain a different dependency volume
+        # after a partial recreation. Generate its own client on every start.
+        npx prisma generate
+        npm run storage:init
+        exec npm run dev:next
 
   temporal-worker-dev:
     <<: *dev-service
@@ -125,6 +137,7 @@ services:
       - /bin/sh
       - -ec
       - |
+        npx prisma generate
         rm -f "$$TEMPORAL_WORKER_READY_FILE"
         exec npm run dev:temporal-worker
     healthcheck:

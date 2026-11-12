@@ -4,7 +4,9 @@ import type { GptImage2ImageSize } from '@/lib/ai-providers/shared/gpt-image-2'
 import {
   OPENROUTER_GPT_IMAGE_2_MODEL_ID,
   OPENROUTER_IMAGE_MODEL_IDS,
+  OPENROUTER_IMAGE_REFERENCE_LIMITS,
 } from './models'
+import { assertImageReferenceCount } from '@/lib/ai-providers/shared/image-reference-validation'
 
 export type OpenRouterImageOptions = Record<string, unknown> & {
   aspectRatio: string
@@ -32,6 +34,7 @@ export async function resolveOpenRouterImageInput(input: {
   if (!OPENROUTER_IMAGE_MODEL_IDS.has(input.modelId)) {
     throw new Error(`OPENROUTER_IMAGE_MODEL_UNSUPPORTED: ${input.modelId}`)
   }
+  assertImageReferenceCount('openrouter', input.options.referenceImages, OPENROUTER_IMAGE_REFERENCE_LIMITS[input.modelId])
   const referenceImages = await normalizeReferences(input.options.referenceImages)
   const inputReferences = referenceImages.length > 0
     ? referenceImages.map((url) => ({

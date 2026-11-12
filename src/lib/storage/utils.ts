@@ -1,7 +1,7 @@
 import { StorageConfigError } from './errors'
 import { getInternalBaseUrl } from '@/lib/env'
 
-export const DEFAULT_SIGNED_URL_EXPIRES_SECONDS = 24 * 60 * 60
+export const DEFAULT_SIGNED_URL_EXPIRES_SECONDS = 2 * 60 * 60
 
 export function resolveBaseUrl(): string {
   return getInternalBaseUrl()

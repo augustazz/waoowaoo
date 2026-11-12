@@ -1,6 +1,7 @@
 import { decodeImageUrlsFromDb } from '@/lib/contracts/image-urls-contract'
 import { createScopedLogger } from '@/lib/logging/core'
 import { getSignedUrl } from '@/lib/storage'
+import { DEFAULT_SIGNED_URL_EXPIRES_SECONDS } from '@/lib/storage/utils'
 
 export type UnknownRecord = Record<string, unknown>
 
@@ -39,7 +40,7 @@ const signedUrlLogger = createScopedLogger({
 })
 const _ulogError = (...args: unknown[]) => signedUrlLogger.error(...args)
 
-function keyToSignedUrl(key: string | null, expires: number = 24 * 60 * 60): string | null {
+function keyToSignedUrl(key: string | null, expires: number = DEFAULT_SIGNED_URL_EXPIRES_SECONDS): string | null {
   if (!key) return null
   if (key.startsWith('http://') || key.startsWith('https://')) {
     return key

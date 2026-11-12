@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CapabilityValue } from '@/lib/ai-registry/types'
 import type { WorkspaceCanvasGenerationCapabilitiesView } from '@/lib/workspace-resource/canvas-generation-capabilities'
 import type { WorkspaceAssistantTurnOutcomeView } from '../../workspace-assistant-focus'
@@ -12,7 +12,6 @@ import {
   canvasReferenceRole,
   canvasDraftReferenceRoles,
   defaultCanvasDraftReferenceRole,
-  resolveCanvasAspectRatioChoices,
   type CanvasDraftComposition,
   type CanvasDraftMediaType,
   type CanvasDraftReference,
@@ -104,7 +103,11 @@ export function useCanvasCreateDraft(params: {
     projectId, folderPath, projectAspectRatio, capabilities, turnOutcomes, projectedResourceIds,
     buildMessage, submitToAssistant, pinResources,
   } = params
-  const [draft, setDraft] = useState<CanvasCreateDraft | null>(null)
+  const [storedDraft, setDraft] = useState<CanvasCreateDraft | null>(null)
+  // Open drafts follow project changes immediately; submitted drafts keep their snapshot.
+  const draft = useMemo(() => storedDraft?.phase === 'compose'
+    ? { ...storedDraft, composition: { ...storedDraft.composition, aspectRatio: projectAspectRatio } }
+    : storedDraft, [storedDraft, projectAspectRatio])
   const submittingRef = useRef<{ readonly draftId: string; readonly controller: AbortController } | null>(null)
 
   const close = useCallback((draftId?: string) => {
@@ -133,7 +136,7 @@ export function useCanvasCreateDraft(params: {
         configurationVersion: capability?.view.configurationVersion ?? null,
         durationSeconds: null,
         text: '',
-        aspectRatio: resolveCanvasAspectRatioChoices(capability, projectAspectRatio).defaultRatio,
+        aspectRatio: projectAspectRatio,
         parameters: {},
         references: input.references ?? [],
       },
@@ -217,6 +220,19 @@ export function useCanvasCreateDraft(params: {
     })
   }, [capabilities])
 
+  const moveReference = useCallback((resourceId: string, direction: -1 | 1) => {
+    submittingRef.current?.controller.abort()
+    setDraft((current) => {
+      if (current?.phase !== 'compose') return current
+      const references = [...current.composition.references]
+      const index = references.findIndex((reference) => reference.resourceId === resourceId)
+      const target = index + direction
+      if (index < 0 || target < 0 || target >= references.length) return current
+      ;[references[index], references[target]] = [references[target], references[index]]
+      return { ...current, composition: { ...current.composition, references } }
+    })
+  }, [])
+
   const submit = useCallback(async () => {
     if (draft?.phase !== 'compose' || !draft.composition.text.trim()) return
     const capability = canvasGenerationCapabilityFor(capabilities, draft.composition.mediaType)
@@ -243,7 +259,7 @@ export function useCanvasCreateDraft(params: {
             id: draftId,
             position: current.position,
             mediaType: current.composition.mediaType,
-            aspectRatio: current.composition.aspectRatio,
+            aspectRatio: draft.composition.aspectRatio,
             sourceMessageId,
             turnObserved: false,
             pinnedResourceIds: [],
@@ -261,6 +277,7 @@ export function useCanvasCreateDraft(params: {
         references: draft.composition.references.map((reference) => ({
           resourceId: reference.resourceId, contentVersion: reference.contentVersion,
           role: reference.role, channel: canvasReferenceRole(reference).channel,
+          ...(reference.purpose ? { purpose: reference.purpose } : {}),
         })),
       },
       expectedProductionConfigurationVersion: capability.view.configurationVersion,
@@ -309,6 +326,7 @@ export function useCanvasCreateDraft(params: {
     addReference,
     removeReference,
     setReferenceRole,
+    moveReference,
     submit,
     close,
   } as const

@@ -8,6 +8,7 @@ import { isPresetComingSoonModelKey } from '../../api-config/types'
 import type { DefaultModels } from '../../api-config/selectors'
 
 export interface ModelSlotOption {
+  videoUnavailableReason?: import('@/lib/ai-registry/video-availability').VideoUnavailableReason
   modelKey: string
   name: string
   provider: string
@@ -66,6 +67,7 @@ export function useApiConfigFilters({ providers, models, defaultModels, availabl
         providerHasKey: hasProviderApiKey(provider),
         comingSoon: isPresetComingSoonModelKey(model.modelKey),
         unclassified: 'unclassified' in model && model.unclassified === true,
+        ...(model.videoAvailability?.reason ? { videoUnavailableReason: model.videoAvailability.reason } : {}),
       }
       const bucket = grouped.get(model.type)
       if (bucket) bucket.push(option)

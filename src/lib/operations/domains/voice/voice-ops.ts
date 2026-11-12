@@ -98,6 +98,7 @@ const voicePlanMetadataSchema = z.object({
   retry: z.boolean(),
   alternatives: z.boolean(),
   resources: z.array(z.object({
+    expectedTaskId: z.string().min(1).optional(),
     resourceId: z.string().min(1),
     workspacePath: z.string().min(1),
     folderPath: z.string().min(1).nullable(),
@@ -336,6 +337,7 @@ async function planRetryVoice(
       alternatives: false,
       resources: resources.map((resource) => ({
         resourceId: resource.resourceId,
+        expectedTaskId: resource.sourceTask.id,
         workspacePath: resource.workspacePath,
         folderPath: null,
         memberIndex: resource.memberIndex,
@@ -392,8 +394,12 @@ async function commitVoice(ctx: ProjectAgentOperationContext, plan: OperationPla
         const task = plan.tasks.find((candidate) => candidate.id === resource.taskPlanId)
         if (!task) throw new Error(`VOICE_PLAN_TASK_MISSING:${resource.taskPlanId}`)
         const payload = parseWorkspaceResourceGenerationTaskPayload(task.payload)
+        if (!resource.expectedTaskId) {
+          throw new ApiError('WORKSPACE_RESOURCE_RETRY_TARGET_CHANGED', { resourceId: resource.resourceId })
+        }
         return {
           resourceId: resource.resourceId,
+          expectedTaskId: resource.expectedTaskId,
           operationId: 'generate_voice',
           operationExecutionId: authorization.operationExecutionId,
           inputHash: payload.resource.inputHash,
@@ -475,7 +481,7 @@ export function createVoiceOperations(): ProjectAgentOperationRegistryDraft {
         },
       },
       confirmation: { kind: 'billable_media', required: true },
-      planContractRevision: 'voice-generation/v11',
+      planContractRevision: 'voice-generation/v12',
       inputSchema: generateVoiceInputSchema,
       outputSchema: generateVoiceOutputSchema,
       plan: async (ctx, input) => input.request.kind === 'retry'

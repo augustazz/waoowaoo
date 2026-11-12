@@ -9,6 +9,10 @@ Usage:
   npm run temporal:worker:rollout -- promote blue|green
   npm run temporal:worker:rollout -- retire blue|green
 
+Only for the bundled Compose Temporal at temporal:7233 via temporal-admin.
+For remote Temporal / Temporal Cloud, manage versions with an authenticated
+Temporal CLI connected to that server (see MULTI_DEVICE_SETUP.zh-CN.md).
+
 bootstrap is the only supported way to activate the first explicitly profiled
 Worker when a Deployment has no Current Version.
 

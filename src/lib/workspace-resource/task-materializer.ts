@@ -104,6 +104,9 @@ export async function materializeWorkspaceResourceTaskTerminalInTransaction(
   if (!input.result) throw new Error(`WORKSPACE_RESOURCE_TASK_RESULT_REQUIRED:${input.task.id}`)
   const mediaId = readString(input.result, 'mediaId')
   if (!mediaId) throw new Error(`WORKSPACE_RESOURCE_TASK_MEDIA_ID_REQUIRED:${input.task.id}`)
+  const posterMediaId = payload.mediaType === 'video'
+    ? readString(input.result, 'posterMediaId')
+    : null
   const actualModelKey = definition.terminalModelKeyRequirement === 'none'
     ? null
     : readString(input.result, 'modelKey')
@@ -117,6 +120,7 @@ export async function materializeWorkspaceResourceTaskTerminalInTransaction(
     mediaType: payload.mediaType,
     schemaId: payload.schemaId,
     content: { kind: 'media', mediaId },
+    posterMediaId,
     inputs: payload.inputs,
     sourceTurnId: payload.sourceTurnId,
     provenance: {
@@ -127,7 +131,17 @@ export async function materializeWorkspaceResourceTaskTerminalInTransaction(
       toolCallId: payload.toolCallId,
       prompt: payload.prompt,
       modelKey: actualModelKey,
-      generationOptions: payload.generationOptions,
+      generationOptions: payload.mediaType === 'image' && Array.isArray(input.result.imageReferences) ? {
+        ...(payload.generationOptions as Record<string, WorkspaceResourceJsonValue>),
+        imageReferenceSubmission: {
+          status: 'submitted',
+          references: (input.result.imageReferences ?? []) as WorkspaceResourceJsonValue,
+        },
+      } : payload.mediaType === 'video' && input.result.outputVerification ? {
+        ...(payload.generationOptions as Record<string, WorkspaceResourceJsonValue>),
+        videoOutputVerification: input.result.outputVerification as WorkspaceResourceJsonValue,
+        ...(input.result.videoExecutionContract ? { videoExecutionContract: input.result.videoExecutionContract as WorkspaceResourceJsonValue } : {}),
+      } : payload.generationOptions,
     },
   })
   const safeMediaProjection: Record<string, number> = {}
@@ -139,6 +153,7 @@ export async function materializeWorkspaceResourceTaskTerminalInTransaction(
     resourceId: materialized.resourceId,
     contentVersion: materialized.contentVersion,
     resourceStatus: 'ready',
+    ...(input.result.outputVerification ? { outputVerification: input.result.outputVerification } : {}),
     ...safeMediaProjection,
   }
 }

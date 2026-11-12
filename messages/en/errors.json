@@ -38,6 +38,8 @@
   "OPERATION_IDEMPOTENCY_KEY_REQUIRED": "This operation is missing a stable request identity. Start it again.",
   "OPERATION_IDEMPOTENCY_KEY_INVALID": "The request identity is invalid. Start the operation again.",
   "OPERATION_PLAN_REQUEST_REPLAY_DIVERGED": "This request was already used for a different generation plan. Start a new operation.",
+  "WORKSPACE_RESOURCE_DISABLED": "This resource is disabled. Restore it in resource details or choose another resource.",
+  "WORKSPACE_RESOURCE_WORKFLOW_BUSY": "This resource is still being generated. Wait for it to finish before changing its use.",
   "WORKSPACE_RESOURCE_RETRY_TARGET_NOT_FOUND": "The failed Resource to retry could not be found.",
   "WORKSPACE_RESOURCE_RETRY_TARGET_DUPLICATE": "The same Resource cannot be selected twice.",
   "WORKSPACE_RESOURCE_RETRY_TARGET_INVALID": "This Resource is not currently retryable. Refresh and check again.",

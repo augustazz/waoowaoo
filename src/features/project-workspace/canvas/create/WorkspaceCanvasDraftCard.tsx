@@ -11,7 +11,6 @@ import { useTranslations } from 'next-intl'
 import { AppIcon, type AppIconName } from '@/components/ui/icons'
 import type { CapabilityValue } from '@/lib/ai-registry/types'
 import { WORKSPACE_RESOURCE_SCHEMA } from '@/lib/workspace-resource/schema-registry'
-import { AspectRatioPicker } from '../controls/AspectRatioPicker'
 import { GenerationParameterFields } from '../controls/GenerationParameterFields'
 import { LoadingSpinner, SELECTABLE_TEXT_CLASS } from '../nodes/renderers/renderer-shared'
 import { resolveWorkspaceCanvasMediaShell } from '../node-presentation-profiles'
@@ -19,7 +18,6 @@ import { workspaceCanvasScrollableRegionProps } from '../canvas-scroll-lock'
 import type { CanvasComposeDraft, CanvasSubmittedDraft } from '../hooks/useCanvasCreateDraft'
 import {
   canvasDraftReferenceRoles,
-  resolveCanvasAspectRatioChoices,
   type CanvasDraftMediaType,
   type CanvasDraftReference,
   type CanvasDraftReferenceRole,
@@ -102,6 +100,7 @@ function ReferenceChip({
   disabled,
   onRemove,
   onChangeRole,
+  onMove,
 }: {
   readonly references: readonly CanvasDraftReference[]
   readonly reference: CanvasDraftReference
@@ -110,6 +109,7 @@ function ReferenceChip({
   readonly disabled: boolean
   readonly onRemove: () => void
   readonly onChangeRole: (role: CanvasDraftReferenceRole) => void
+  readonly onMove?: (direction: -1 | 1) => void
 }) {
   const t = useTranslations('projectWorkflow.canvas.workspace.create')
   const roles = canvasDraftReferenceRoles(draftMediaType, reference.mediaType, capability, references.filter((other) => other.resourceId !== reference.resourceId).map(canvasReferenceRole))
@@ -127,8 +127,13 @@ function ReferenceChip({
         )}
       </span>
       <span className={`${SELECTABLE_TEXT_CLASS} min-w-0 flex-1 truncate text-xs font-medium text-[var(--glass-text-primary)]`} title={reference.name}>
-        {reference.name}
+        {references.indexOf(reference) + 1}. {reference.name} · v{reference.contentVersion}
+        {reference.purpose ? <span className="ml-1 text-[10px] text-slate-500">{t(`referencePurpose.${reference.purpose}`)}</span> : null}
       </span>
+      {onMove ? <span className="flex gap-1">
+        <button type="button" disabled={disabled || references.indexOf(reference) === 0} onClick={() => onMove(-1)} aria-label={t('moveReferenceUp')} className="text-xs disabled:opacity-30">↑</button>
+        <button type="button" disabled={disabled || references.indexOf(reference) === references.length - 1} onClick={() => onMove(1)} aria-label={t('moveReferenceDown')} className="text-xs disabled:opacity-30">↓</button>
+      </span> : null}
       {roles.length > 0 && (roles.length > 1 || !roles.includes(reference.role)) ? (
         <select
           value={roles.includes(reference.role) ? reference.role : ''}
@@ -169,7 +174,7 @@ function ReferenceChip({
 /**
  * The in-place draft at the double-clicked position: a placeholder card the
  * size of the future result, with the brief panel below it. Only what the
- * user alone can decide lives here (what, frame, references); the assistant
+ * user alone can decide lives here (what, references); the assistant
  * writes the final prompt and the plan approval shows the cost.
  */
 export function WorkspaceCanvasDraftCard({
@@ -185,12 +190,12 @@ export function WorkspaceCanvasDraftCard({
   dropTargetRef,
   dropHighlighted,
   onChangeText,
-  onChangeAspectRatio,
   onChangeDuration,
   onReviewConfiguration,
   onChangeParameter,
   onRemoveReference,
   onChangeReferenceRole,
+  onMoveReference,
   onSubmit,
   onClose,
 }: {
@@ -210,10 +215,10 @@ export function WorkspaceCanvasDraftCard({
   readonly onChangeText: (text: string) => void
   readonly onChangeDuration: (seconds: number) => void
   readonly onReviewConfiguration: () => void
-  readonly onChangeAspectRatio: (ratio: string) => void
   readonly onChangeParameter: (field: string, value: CapabilityValue | undefined) => void
   readonly onRemoveReference: (resourceId: string) => void
   readonly onChangeReferenceRole: (resourceId: string, role: CanvasDraftReferenceRole) => void
+  readonly onMoveReference?: (resourceId: string, direction: -1 | 1) => void
   readonly onSubmit: () => void
   readonly onClose: () => void
 }) {
@@ -224,7 +229,6 @@ export function WorkspaceCanvasDraftCard({
   const composing = draft.phase === 'compose'
   const mediaType = composing ? draft.composition.mediaType : draft.mediaType
   const aspectRatio = composing ? draft.composition.aspectRatio : draft.aspectRatio
-  const ratioChoices = resolveCanvasAspectRatioChoices(capability, projectAspectRatio).choices
   const modelReady = capability !== null
   const referenceRoles = composing ? draft.composition.references.map(canvasReferenceRole) : []
   const issues = composing ? canvasGenerationFormIssues(capability, { ...draft.composition, references: referenceRoles }) : []
@@ -314,18 +318,11 @@ export function WorkspaceCanvasDraftCard({
                   : t(`modelMissing.${mediaType}`)}
             </p>
           ) : null}
-          {!adaptiveFrame && ratioChoices.length > 0 ? (
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-medium text-[var(--glass-text-secondary)]">{t('aspectRatio')}</span>
-              <AspectRatioPicker
-                choices={ratioChoices}
-                value={draft.composition.aspectRatio}
-                label={t('aspectRatio')}
-                onChange={onChangeAspectRatio}
-              />
-            </div>
+          {!adaptiveFrame && aspectRatio ? (
+            <p className="text-[11px] text-[var(--glass-text-tertiary)]">
+              {t('projectAspectRatio', { ratio: aspectRatio })}
+            </p>
           ) : null}
-
           {adaptiveFrame ? <p className="text-xs text-slate-500">{t('adaptiveFrame')}</p> : null}
           {capability?.mediaType === 'video' && capability.view.pricingLimited ? <p className="text-[11px] text-slate-500">{t('pricingLimited')}</p> : null}
           {mediaType === 'video' && durations.length > 0 ? (
@@ -354,6 +351,7 @@ export function WorkspaceCanvasDraftCard({
                     disabled={false}
                     onRemove={() => onRemoveReference(reference.resourceId)}
                     onChangeRole={(role) => onChangeReferenceRole(reference.resourceId, role)}
+                    onMove={onMoveReference ? (direction) => onMoveReference(reference.resourceId, direction) : undefined}
                   />
                 ))}
               </ul>

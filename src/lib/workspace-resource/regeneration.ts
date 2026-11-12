@@ -24,6 +24,7 @@ export interface WorkspaceResourceRegenerationReference {
   readonly contentVersion: number
   readonly role: string
   readonly channel: WorkspaceResourceRegenerationReferenceChannel
+  readonly purpose?: 'identity' | 'scene' | 'continuity' | 'prop' | 'style'
 }
 
 export type WorkspaceResourceRegenerationParameters = Readonly<Record<string, string | number | boolean>>
@@ -33,8 +34,6 @@ export interface WorkspaceResourceRegenerationTemplate {
   readonly mediaType: 'image' | 'video'
   readonly prompt: string
   readonly aspectRatio: string | null
-  /** Fixed-format asset images cannot change their frame. */
-  readonly aspectRatioLocked: boolean
   /** Frozen provider parameters other than the frame (resolution, quality, audio). */
   readonly parameters: WorkspaceResourceRegenerationParameters
   readonly durationSeconds: number | null
@@ -89,6 +88,8 @@ function readReference(value: WorkspaceResourceJsonValue): WorkspaceResourceRege
     contentVersion,
     role,
     channel: channel as WorkspaceResourceRegenerationReferenceChannel,
+    ...(typeof value.purpose === 'string' && ['identity', 'scene', 'continuity', 'prop', 'style'].includes(value.purpose)
+      ? { purpose: value.purpose as WorkspaceResourceRegenerationReference['purpose'] } : {}),
   }
 }
 
@@ -116,7 +117,6 @@ export function readWorkspaceResourceRegenerationTemplate(
     mediaType,
     prompt: item.prompt,
     aspectRatio,
-    aspectRatioLocked: mediaType === 'image' && typeof item.assetKind === 'string',
     parameters,
     durationSeconds,
     references,
@@ -133,12 +133,10 @@ export function applyWorkspaceResourceRegenerationEdits(
   const item = requireItem(input)
   const request = input.request as WorkspaceResourceJsonObject
   const options: Record<string, WorkspaceResourceJsonValue> = {}
-  if (template.aspectRatioLocked) {
-    if (template.aspectRatio) options.aspectRatio = template.aspectRatio
-  } else if (edits.aspectRatio) {
-    options.aspectRatio = edits.aspectRatio
+  // Regeneration is a new output: historical frames cannot override the project.
+  for (const [field, value] of Object.entries(edits.parameters)) {
+    if (field !== 'aspectRatio') options[field] = value
   }
-  for (const [field, value] of Object.entries(edits.parameters)) options[field] = value
   const nextItem: Record<string, WorkspaceResourceJsonValue> = {
     ...item,
     name: edits.name.trim(),
@@ -148,7 +146,14 @@ export function applyWorkspaceResourceRegenerationEdits(
       contentVersion: reference.contentVersion,
       role: reference.role,
       channel: reference.channel,
+      ...(reference.purpose ? { purpose: reference.purpose } : {}),
     })),
+  }
+  if (template.mediaType === 'image') {
+    nextItem.referenceMode = edits.references.some((reference) => reference.channel === 'image') ? 'images' : 'text_only'
+    // The editor's explicit list is authoritative; an old recipe must not
+    // silently put a removed reference back into the next generation.
+    delete nextItem.referencePlan
   }
   if (Object.keys(options).length > 0) nextItem.options = options
   else delete nextItem.options

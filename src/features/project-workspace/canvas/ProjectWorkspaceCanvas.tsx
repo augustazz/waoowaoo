@@ -1,5 +1,7 @@
 'use client'
 
+import { resolveProjectVideoRatio } from '@/lib/projects/video-ratio'
+
 import { canvasReferenceRole } from './create/canvas-draft'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -83,9 +85,18 @@ import { isWorkspaceCanvasEditableTarget } from './canvas-interaction-target'
 import { CanvasOperationConfirmationModal } from './actions/CanvasOperationConfirmationModal'
 import { WorkspaceResourcePreviewModal } from './preview/WorkspaceResourcePreviewModal'
 import { ProductionStepNavigation } from './stages/ProductionStepNavigation'
-import { productionStageDefinition } from '@/lib/workspace-resource/production-stages'
-import type { ProductionContentView } from '@/lib/workspace-resource/step-navigation'
+import { ProductionStepContentPanel } from './stages/ProductionStepContentPanel'
+import {
+  emptyProductionStageView,
+  productionStageDefinition,
+  productionStageFolderPaths,
+  productionStageForFolderPath,
+  productionStageForResource,
+  PRODUCTION_STAGES_I18N_NAMESPACE,
+  type ProductionStageKey,
+} from '@/lib/workspace-resource/production-stages'
 import { useActiveProductionStep } from './hooks/useActiveProductionStep'
+import { useSelectProductionStep } from './hooks/useSelectProductionStep'
 import { ScreenplayWorkbench } from './script/ScreenplayWorkbench'
 import { workspaceNodeId } from './workspace-canvas-node-ids'
 import { useCanvasUploadQueue, type CanvasUploadQueueItem } from './upload/useCanvasUploadQueue'
@@ -120,6 +131,14 @@ interface CurrentCanvasFolder {
   readonly ancestors: readonly WorkspaceResourceAncestorView[]
 }
 
+/** Shared scope for the content management panel and canvas projection. */
+type CanvasProjectionMode = 'step' | 'folder'
+
+interface CanvasStepFocusRequest {
+  readonly stepKey: ProductionStageKey
+  readonly requestId: number
+}
+
 interface ProjectWorkspaceCanvasContentProps {
   readonly selection: WorkspaceCanvasSelection | null
   readonly onSelectionChange: (selection: WorkspaceCanvasSelection | null) => void
@@ -132,6 +151,14 @@ interface ProjectWorkspaceCanvasContentProps {
 }
 
 const EMPTY_TURN_OUTCOMES: readonly WorkspaceAssistantTurnOutcomeView[] = []
+
+const STAGES_NAMESPACE_PREFIX = `${PRODUCTION_STAGES_I18N_NAMESPACE}.`
+
+function toStagesNamespaceKey(fullKey: string): string {
+  return fullKey.startsWith(STAGES_NAMESPACE_PREFIX)
+    ? fullKey.slice(STAGES_NAMESPACE_PREFIX.length)
+    : fullKey
+}
 
 interface WorkspaceCanvasUserPosition {
   readonly x: number
@@ -209,37 +236,57 @@ function ProjectWorkspaceFolderCanvas({
   activeAssistantFocusRequest = null,
   assistantTurnOutcomes = EMPTY_TURN_OUTCOMES,
   onOpenWorkspacePath,
-  contentView,
-  onContentViewChange,
+  canvasMode,
+  onCanvasModeChange,
+  stepFocusRequest,
+  onStepFocusConsumed,
+  onRequestStepFocus,
 }: ProjectWorkspaceCanvasContentProps & {
   readonly folder: CurrentCanvasFolder
   readonly rootName: string
   readonly pendingLocateResourceId: string | null
   readonly onNavigate: (folder: CurrentCanvasFolder, locateResourceId?: string | null) => void
   readonly onLocateConsumed: () => void
-  readonly contentView: ProductionContentView
-  readonly onContentViewChange: (view: ProductionContentView) => void
+  readonly canvasMode: CanvasProjectionMode
+  readonly onCanvasModeChange: (mode: CanvasProjectionMode) => void
+  readonly stepFocusRequest: CanvasStepFocusRequest | null
+  readonly onStepFocusConsumed: () => void
+  readonly onRequestStepFocus: (stepKey: ProductionStageKey) => void
 }) {
   const t = useTranslations('projectWorkflow.canvas.workspace')
+  const tStages = useTranslations('projectWorkflow.canvas.workspace.stages')
   const tCreate = useTranslations('projectWorkflow.canvas.workspace.create')
   const { projectId } = useWorkspaceProvider()
   const { data: projectData } = useProjectData(projectId)
-  const projectAspectRatio = projectData?.videoRatio ?? null
+  const projectAspectRatio = projectData ? resolveProjectVideoRatio(projectData.videoRatio) : null
   const currentFolderPath = folder.folderKey === WORKSPACE_RESOURCE_ROOT_FOLDER_KEY ? null : folder.workspacePath
-  // In the step view, new files must land in the selected step's folder so the
-  // step panel and the file tree agree. The full-files view keeps the folder
-  // the user actually navigated to.
-  const { activeStep } = useActiveProductionStep(projectId)
-  const creationFolderPath = contentView === 'step'
-    ? productionStageDefinition(activeStep).defaultFolderPath
+  const { activeStep, stages } = useActiveProductionStep(projectId)
+  const selectStep = useSelectProductionStep(projectId)
+  const activeStage = stages.find((stage) => stage.key === activeStep)
+    ?? emptyProductionStageView(activeStep)
+  const activeStepFolderPath = productionStageDefinition(activeStep).defaultFolderPath
+  const rootFolder = useMemo<CurrentCanvasFolder>(() => ({
+    folderKey: WORKSPACE_RESOURCE_ROOT_FOLDER_KEY,
+    name: rootName,
+    workspacePath: '',
+    ancestors: [],
+  }), [rootName])
+  const isStepCanvas = canvasMode === 'step'
+  const creationFolderPath = isStepCanvas
+    ? activeStepFolderPath
     : currentFolderPath
+  // The step canvas is a projection over the step's owned files, not a folder:
+  // legacy resources can live outside the canonical folder. The folder tree is
+  // only used by the all-content canvas projection.
+  const canvasFolderPath = isStepCanvas ? null : currentFolderPath
   const generationCapabilitiesQuery = useCanvasGenerationCapabilities(projectId)
   const generationCapabilities = generationCapabilitiesQuery.isError || generationCapabilitiesQuery.isFetching ? null : generationCapabilitiesQuery.data ?? null
   const folderQuery = useWorkspaceResources({
     projectId,
-    prefix: folder.workspacePath || null,
+    prefix: isStepCanvas ? null : currentFolderPath,
     search: null,
     scope: 'subtree',
+    step: isStepCanvas ? activeStep : null,
   })
   const resources = useMemo(() => flattenResources(folderQuery.data), [folderQuery.data])
   const fetchNextFolderPage = folderQuery.fetchNextPage
@@ -350,7 +397,7 @@ function ProjectWorkspaceFolderCanvas({
   const projection = useWorkspaceNodeCanvasProjection({
     projectId,
     projectAspectRatio,
-    currentFolderPath: folder.workspacePath || null,
+    currentFolderPath: canvasFolderPath,
     collapsedSeed: collapsedFolders,
     workspaceResources: resources,
     savedLayouts: savedNodeLayouts,
@@ -374,8 +421,9 @@ function ProjectWorkspaceFolderCanvas({
   const buildDraftMessage = useCallback((composition: CanvasDraftComposition) => buildCanvasDraftMessage({
     composition,
     folderPath: creationFolderPath,
+    projectAspectRatio,
     t: (key, values) => tCreate(key, values),
-  }), [creationFolderPath, tCreate])
+  }), [creationFolderPath, projectAspectRatio, tCreate])
   const createDraft = useCanvasCreateDraft({
     projectId,
     folderPath: creationFolderPath,
@@ -685,6 +733,17 @@ function ProjectWorkspaceFolderCanvas({
     void reactFlow.fitView({ nodes: [node], padding: 0.35, maxZoom: 1, duration: 180 })
     return true
   }, [flowNodes, notifyCanvasUserInteraction, onSelectionChange, reactFlow, reactFlowReady, selectionForNode])
+  const focusProjectedFolderPath = useCallback((workspacePath: string): boolean => {
+    if (!reactFlowReady) return false
+    const node = flowNodes.find((candidate) => (
+      candidate.data.kind === 'folder'
+      && candidate.data.folder.workspacePath === workspacePath
+    ))
+    if (!node) return false
+    notifyCanvasUserInteraction()
+    void reactFlow.fitView({ nodes: [node], padding: 0.2, maxZoom: 1, duration: 380 })
+    return true
+  }, [flowNodes, notifyCanvasUserInteraction, reactFlow, reactFlowReady])
   const openProjectedFolder = useCallback((target: WorkspaceCanvasFolderOpenTarget) => {
     const parent: WorkspaceResourceAncestorView[] = folder.folderKey === WORKSPACE_RESOURCE_ROOT_FOLDER_KEY
       ? []
@@ -775,6 +834,29 @@ function ProjectWorkspaceFolderCanvas({
     notifyCanvasUserInteraction()
     void reactFlow.fitView({ padding: 0.14, duration: 180 })
   }, [notifyCanvasUserInteraction, reactFlow])
+  // Center a step at the user's current zoom. Only the all-content projection
+  // needs a new scale to bring the complete project into view.
+  const canvasScopeKey = isStepCanvas ? `step:${activeStep}` : `folder:${currentFolderPath ?? ''}`
+  const previousScopeKeyRef = useRef(canvasScopeKey)
+  const pendingScopeFitRef = useRef(false)
+  useEffect(() => {
+    if (previousScopeKeyRef.current === canvasScopeKey) return
+    previousScopeKeyRef.current = canvasScopeKey
+    pendingScopeFitRef.current = true
+  }, [canvasScopeKey])
+  useEffect(() => {
+    if (!pendingScopeFitRef.current || !projectionComplete || !reactFlowReady) return
+    pendingScopeFitRef.current = false
+    // A pending step focus owns the camera; fitting the whole projection
+    // would immediately override it.
+    if (stepFocusRequest) return
+    const zoom = reactFlow.getViewport().zoom
+    void reactFlow.fitView({
+      padding: 0.14,
+      duration: 180,
+      ...(isStepCanvas ? { minZoom: zoom, maxZoom: zoom } : {}),
+    })
+  }, [canvasScopeKey, isStepCanvas, projectionComplete, reactFlow, reactFlowReady, stepFocusRequest])
   const [arranging, setArranging] = useState(false)
   const [arrangeFailed, setArrangeFailed] = useState(false)
   const arrangeLayout = useCallback(async () => {
@@ -783,7 +865,7 @@ function ProjectWorkspaceFolderCanvas({
     setArranging(true)
     setArrangeFailed(false)
     const arranged = buildWorkspaceNodeCanvasProjection({
-      projectId, projectAspectRatio, currentFolderPath, collapsedSeed: collapsedFolders,
+      projectId, projectAspectRatio, currentFolderPath: canvasFolderPath, collapsedSeed: collapsedFolders,
       workspaceResources: resources, savedLayouts: [], translate: t,
     }).nodes
     const positions = new Map(arranged.map((node) => [node.id, node.position]))
@@ -799,7 +881,7 @@ function ProjectWorkspaceFolderCanvas({
     } finally {
       setArranging(false)
     }
-  }, [arranging, collapsedFolders, currentFolderPath, history, notifyCanvasUserInteraction, persistCurrentLayout, projectAspectRatio, projectId, projectionComplete, resources, t])
+  }, [arranging, canvasFolderPath, collapsedFolders, history, notifyCanvasUserInteraction, persistCurrentLayout, projectAspectRatio, projectId, projectionComplete, resources, t])
   const zoomIn = useCallback(() => {
     notifyCanvasUserInteraction()
     void reactFlow.zoomIn({ duration: 160 })
@@ -816,6 +898,30 @@ function ProjectWorkspaceFolderCanvas({
     if (!pendingLocateResourceId || !locateProjectedResource(pendingLocateResourceId)) return
     onLocateConsumed()
   }, [locateProjectedResource, onLocateConsumed, pendingLocateResourceId])
+  // All-content mode keeps every step projected. Selecting a step only moves
+  // the camera to its folder/files; it never filters the other steps out.
+  useEffect(() => {
+    if (!stepFocusRequest || isStepCanvas || !projectionComplete || !reactFlowReady) return
+    const stage = stages.find((candidate) => candidate.key === stepFocusRequest.stepKey)
+    const primaryWorkspacePath = stage?.primaryWorkspacePath ?? null
+    const primaryFolderPath = primaryWorkspacePath
+      ? workspaceResourceParentPath(primaryWorkspacePath)
+      : null
+    const primaryResourceId = stage?.items[0]?.resourceId ?? null
+    const focused = productionStageFolderPaths(stepFocusRequest.stepKey).some(focusProjectedFolderPath)
+      || (primaryFolderPath ? focusProjectedFolderPath(primaryFolderPath) : false)
+    if (!focused && primaryResourceId) locateProjectedResource(primaryResourceId)
+    onStepFocusConsumed()
+  }, [
+    focusProjectedFolderPath,
+    isStepCanvas,
+    locateProjectedResource,
+    onStepFocusConsumed,
+    projectionComplete,
+    reactFlowReady,
+    stages,
+    stepFocusRequest,
+  ])
 
   const requestAssistantDraft = useCallback((text: string | null) => {
     onAssistantDraftRequest({ kind: 'prefill', requestId: crypto.randomUUID(), text, focus: true })
@@ -949,22 +1055,26 @@ function ProjectWorkspaceFolderCanvas({
       name: parent.name,
       workspacePath: parent.workspacePath,
       ancestors: folder.ancestors.slice(0, -1),
-    } : {
-      folderKey: WORKSPACE_RESOURCE_ROOT_FOLDER_KEY,
-      name: rootName,
-      workspacePath: '',
-      ancestors: [],
-    })
-  }, [folder.ancestors, folder.folderKey, onNavigate, rootName])
+    } : rootFolder)
+  }, [folder.ancestors, folder.folderKey, onNavigate, rootFolder])
   const handleSearchResult = useCallback((resource: WorkspaceResourceView) => {
     setSearch('')
+    // Selecting a resource also selects the step that owns it. This keeps
+    // "只看当前步骤" aligned with the file/folder the user just clicked, even
+    // when the resource was already projected and no navigation is needed.
+    const folderPath = resource.resourceKind === 'folder'
+      ? resource.workspacePath
+      : workspaceResourceParentPath(resource.workspacePath)
+    const stepKey = (folderPath ? productionStageForFolderPath(folderPath) : null)
+      ?? productionStageForResource(resource)
+    if (stepKey) selectStep(stepKey)
     if (resource.resourceKind === 'folder') {
       onNavigate(folderFromResource(resource))
       return
     }
     if (locateProjectedResource(resource.resourceId)) return
     onNavigate(parentFolderFromResource(resource, rootName), resource.resourceId)
-  }, [locateProjectedResource, onNavigate, rootName])
+  }, [locateProjectedResource, onNavigate, rootName, selectStep])
 
   const handleCanvasKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (isWorkspaceCanvasEditableTarget(event.target)) return
@@ -1002,6 +1112,16 @@ function ProjectWorkspaceFolderCanvas({
       readonly operation: WorkspaceCanvasFolderNodeData['folder']['deleteOperation']
     }) => deleteAction.begin([{ operation: target.operation, label: target.name }]),
   }), [deleteAction, openProjectedFolder, operationAction.busy])
+  const showSelectedStep = (stepKey: ProductionStageKey) => {
+    onSelectionChange(null)
+    setSearch('')
+    if (isStepCanvas) return
+    onCanvasModeChange('folder')
+    onRequestStepFocus(stepKey)
+    if (folder.folderKey !== WORKSPACE_RESOURCE_ROOT_FOLDER_KEY) {
+      onNavigate(rootFolder)
+    }
+  }
   return (
     <WorkspaceCanvasFolderActionsContext.Provider value={folderActions}>
       <WorkspaceCanvasResourceSelectionContext.Provider value={selectResourceNode}>
@@ -1053,34 +1173,6 @@ function ProjectWorkspaceFolderCanvas({
           proOptions={WORKSPACE_REACT_FLOW_PRO_OPTIONS}
         >
           <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
-          {contentView === 'files' ? (
-          <Panel position="top-left" className="!z-[80] !m-0" style={{ left: 16, top: 72 }}>
-            <CanvasFolderNavigation
-              canGoBack={folder.folderKey !== WORKSPACE_RESOURCE_ROOT_FOLDER_KEY}
-              onBack={handleGoBack}
-              folderDisplays={folderDisplays}
-              canvasSubtreePaths={canvasSubtreePaths}
-              onJumpToFolder={jumpToFolder}
-              search={search}
-              backLabel={t('folderNavigation.back')}
-              searchPlaceholder={t('folderNavigation.searchPlaceholder')}
-              searchResultsLabel={t('folderNavigation.searchResults')}
-              noResultsLabel={t('folderNavigation.noResults')}
-              loadingLabel={t('folderNavigation.loading')}
-              loadFailedLabel={t('folderNavigation.loadFailed')}
-              retryLabel={t('folderNavigation.retry')}
-              loadMoreLabel={t('folderNavigation.loadMore')}
-              searchResults={searchResults}
-              searchLoading={searchQuery.isLoading || searchQuery.isFetching}
-              searchFailed={searchQuery.isError}
-              searchHasMore={Boolean(searchQuery.hasNextPage)}
-              onSearchChange={setSearch}
-              onSearchResult={handleSearchResult}
-              onRetrySearch={() => { void searchQuery.refetch() }}
-              onLoadMoreSearch={() => { void searchQuery.fetchNextPage() }}
-            />
-          </Panel>
-          ) : null}
           {folderQuery.isFetchingNextPage ? (
             <Panel position="top-right" className="!m-0" style={{ right: 16, top: 16 }}>
               <span className="rounded-full bg-white/90 px-3 py-1.5 text-xs text-[var(--glass-text-secondary)] shadow-sm">
@@ -1120,12 +1212,12 @@ function ProjectWorkspaceFolderCanvas({
                 dropTargetRef={draftCardRef}
                 dropHighlighted={referenceDrop.activeTarget === 'draft'}
                 onChangeText={(text) => createDraft.updateComposition({ text })}
-                onChangeAspectRatio={(aspectRatio) => createDraft.updateComposition({ aspectRatio })}
                 onChangeParameter={createDraft.setParameter}
                 onChangeDuration={(durationSeconds) => createDraft.updateComposition({ durationSeconds })}
                 onReviewConfiguration={createDraft.reviewConfiguration}
                 onRemoveReference={createDraft.removeReference}
                 onChangeReferenceRole={createDraft.setReferenceRole}
+                onMoveReference={createDraft.moveReference}
                 onSubmit={() => { void createDraft.submit() }}
                 onClose={() => createDraft.close()}
               />
@@ -1192,13 +1284,107 @@ function ProjectWorkspaceFolderCanvas({
             />
           </Panel>
         </ReactFlow>
+        <aside
+          aria-label={t('folderNavigation.directory')}
+          className="absolute bottom-[240px] left-4 top-[72px] z-[80] flex max-w-[calc(100%-2rem)] flex-col items-start pointer-events-none"
+        >
+          <CanvasFolderNavigation
+            stages={stages}
+            activeStep={activeStep}
+            onStepSelected={(stepKey) => {
+              selectStep(stepKey)
+              showSelectedStep(stepKey)
+            }}
+            onStartStep={(stepKey) => requestAssistantDraft(tStages(
+              toStagesNamespaceKey(productionStageDefinition(stepKey).assistant.startPromptKey),
+            ))}
+            canGoBack={canvasMode === 'folder'
+              && folder.folderKey !== WORKSPACE_RESOURCE_ROOT_FOLDER_KEY}
+            onBack={handleGoBack}
+            folderDisplays={folderDisplays}
+            canvasSubtreePaths={canvasSubtreePaths}
+            onJumpToFolder={jumpToFolder}
+            onFolderFocus={(folderResource) => {
+              const stepKey = productionStageForFolderPath(folderResource.workspacePath)
+              if (!stepKey || isStepCanvas) return false
+              selectStep(stepKey)
+              // Only the step's root folders get the "keep every step
+              // visible" treatment. Nested folders keep normal jump/enter
+              // behavior so browsing the step's own structure still works.
+              if (!productionStageFolderPaths(stepKey).includes(folderResource.workspacePath)) {
+                return false
+              }
+              // Already showing the root all-content projection: let the
+              // normal folder jump focus it without changing the projection.
+              if (!isStepCanvas
+                && canvasMode === 'folder'
+                && folder.folderKey === WORKSPACE_RESOURCE_ROOT_FOLDER_KEY) {
+                return false
+              }
+              // Show every step and focus the selected one instead of
+              // entering the step folder, which would hide the other steps.
+              onCanvasModeChange('folder')
+              onRequestStepFocus(stepKey)
+              if (folder.folderKey !== WORKSPACE_RESOURCE_ROOT_FOLDER_KEY) {
+                onNavigate(rootFolder)
+              }
+              return true
+            }}
+            search={search}
+            backLabel={t('folderNavigation.back')}
+            searchPlaceholder={t('folderNavigation.searchPlaceholder')}
+            searchResultsLabel={t('folderNavigation.searchResults')}
+            noResultsLabel={t('folderNavigation.noResults')}
+            loadingLabel={t('folderNavigation.loading')}
+            loadFailedLabel={t('folderNavigation.loadFailed')}
+            retryLabel={t('folderNavigation.retry')}
+            loadMoreLabel={t('folderNavigation.loadMore')}
+            searchResults={searchResults}
+            searchLoading={searchQuery.isLoading || searchQuery.isFetching}
+            searchFailed={searchQuery.isError}
+            searchHasMore={Boolean(searchQuery.hasNextPage)}
+            onSearchChange={setSearch}
+            onSearchResult={handleSearchResult}
+            onRetrySearch={() => { void searchQuery.refetch() }}
+            onLoadMoreSearch={() => { void searchQuery.fetchNextPage() }}
+            scopePath={isStepCanvas ? activeStepFolderPath : null}
+            scopeLabel={t('folderNavigation.allContent')}
+            viewingAll={!isStepCanvas}
+            viewAllLabel={t('folderNavigation.viewAll')}
+            viewStepLabel={t('folderNavigation.viewStepOnly')}
+            onToggleScope={() => {
+              onStepFocusConsumed()
+              onSelectionChange(null)
+              setSearch('')
+              if (isStepCanvas) {
+                onCanvasModeChange('folder')
+                if (folder.folderKey !== WORKSPACE_RESOURCE_ROOT_FOLDER_KEY) {
+                  onNavigate(rootFolder)
+                }
+                return
+              }
+              onCanvasModeChange('step')
+            }}
+            stepContent={isStepCanvas ? (
+              <ProductionStepContentPanel
+                embedded
+                projectId={projectId}
+                stage={activeStage}
+                onOpenScreenplay={setScreenplayResourceId}
+                onOpenResourcePath={(workspacePath) => {
+                  const resource = resources.find((candidate) => candidate.workspacePath === workspacePath)
+                  if (resource && locateProjectedResource(resource.resourceId)) return
+                  onOpenWorkspacePath?.(workspacePath)
+                }}
+                onStart={() => requestAssistantDraft(tStages(toStagesNamespaceKey(activeStage.assistant.startPromptKey)))}
+                onReview={() => requestAssistantDraft(tStages(toStagesNamespaceKey(activeStage.assistant.reviewPromptKey)))}
+              />
+            ) : null}
+          />
+        </aside>
         <ProductionStepNavigation
           projectId={projectId}
-          contentView={contentView}
-          onContentViewChange={onContentViewChange}
-          onOpenResourcePath={(workspacePath) => onOpenWorkspacePath?.(workspacePath)}
-          onOpenScreenplay={setScreenplayResourceId}
-          onAssistantDraft={(text) => requestAssistantDraft(text)}
+          onStepSelected={showSelectedStep}
         />
         {multiSelection.marquee ? (
           <div
@@ -1299,9 +1485,20 @@ function ProjectWorkspaceCanvasContent(props: ProjectWorkspaceCanvasContentProps
     ancestors: [],
   })
   const [pendingLocateResourceId, setPendingLocateResourceId] = useState<string | null>(null)
-  // Content view lives above the per-folder canvas so a folder jump (e.g.
-  // locating a file) does not reset it or bounce the user back to step view.
-  const [contentView, setContentView] = useState<ProductionContentView>('step')
+  // One scope drives both the fixed panel and the canvas, so the scope toggle
+  // cannot leave the directory and the visible resources out of sync.
+  const [canvasMode, setCanvasMode] = useState<CanvasProjectionMode>('step')
+  // All-content mode focuses a step without filtering the others out. The
+  // request is kept above the keyed canvas so a root-folder remount can still
+  // apply it once the projection is ready.
+  const stepFocusRequestIdRef = useRef(0)
+  const [stepFocusRequest, setStepFocusRequest] = useState<CanvasStepFocusRequest | null>(null)
+  const requestStepFocus = useCallback((stepKey: ProductionStageKey) => {
+    stepFocusRequestIdRef.current += 1
+    setStepFocusRequest({ stepKey, requestId: stepFocusRequestIdRef.current })
+  }, [])
+  const consumeStepFocus = useCallback(() => setStepFocusRequest(null), [])
+  const selectStep = useSelectProductionStep(projectId)
   const pathFocusQuery = useWorkspaceResourceByPath({
     projectId,
     workspacePath: props.workspacePathFocusRequest?.workspacePath ?? null,
@@ -1312,8 +1509,14 @@ function ProjectWorkspaceCanvasContent(props: ProjectWorkspaceCanvasContentProps
   const navigate = useCallback((nextFolder: CurrentCanvasFolder, locateResourceId: string | null = null) => {
     props.onSelectionChange(null)
     setPendingLocateResourceId(locateResourceId)
+    setCanvasMode('folder')
     setFolder(nextFolder)
-  }, [props])
+    // Opening a step folder (or anything inside it) makes that step the
+    // current one, so "只看当前步骤" returns to the step the user just opened
+    // instead of a stale previous selection.
+    const stepKey = productionStageForFolderPath(nextFolder.workspacePath)
+    if (stepKey) selectStep(stepKey)
+  }, [props, selectStep])
   useEffect(() => {
     const request = props.workspacePathFocusRequest
     if (!request || pathFocusQuery.isLoading || handledPathFocusRequestId.current === request.requestId) return
@@ -1336,8 +1539,11 @@ function ProjectWorkspaceCanvasContent(props: ProjectWorkspaceCanvasContentProps
       pendingLocateResourceId={pendingLocateResourceId}
       onNavigate={navigate}
       onLocateConsumed={() => setPendingLocateResourceId(null)}
-      contentView={contentView}
-      onContentViewChange={setContentView}
+      canvasMode={canvasMode}
+      onCanvasModeChange={setCanvasMode}
+      stepFocusRequest={stepFocusRequest}
+      onStepFocusConsumed={consumeStepFocus}
+      onRequestStepFocus={requestStepFocus}
     />
   )
 }

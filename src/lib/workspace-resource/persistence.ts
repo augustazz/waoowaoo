@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { ApiError } from '@/lib/api-errors'
 import { storeWorkspaceResourceContent, workspaceResourceContentPreview } from './content-store'
 import type {
   WorkspaceResourceInputRef,
@@ -335,12 +336,13 @@ export async function retryWorkspaceResourcesInTransaction(
     readonly userId: string
     readonly projectId: string
     readonly resources: readonly {
+      readonly expectedTaskId: string
       readonly resourceId: string
       readonly operationId: string
       readonly operationExecutionId: string | null
       readonly inputHash: string
       readonly prompt: string | null
-      readonly modelKey: string
+      readonly modelKey: string | null
       readonly generationOptions: WorkspaceResourceJsonValue
       readonly toolCallId: string | null
     }[]
@@ -349,12 +351,18 @@ export async function retryWorkspaceResourcesInTransaction(
   if (input.resources.length === 0) throw new Error('WORKSPACE_RESOURCE_RETRY_TARGETS_REQUIRED')
   await lockOwnedProject(tx, input.projectId, input.userId)
   for (const resource of input.resources) {
+    if (!resource.expectedTaskId) {
+      throw new ApiError('WORKSPACE_RESOURCE_RETRY_TARGET_CHANGED', { resourceId: resource.resourceId })
+    }
     const updated = await tx.workspaceResource.updateMany({
       where: {
         id: resource.resourceId,
         userId: input.userId,
         projectId: input.projectId,
         status: { in: ['failed', 'canceled'] },
+        taskId: resource.expectedTaskId,
+        activePath: { not: null },
+        workflowEnabled: true,
         deletedAt: null,
       },
       data: {
@@ -369,7 +377,7 @@ export async function retryWorkspaceResourcesInTransaction(
       },
     })
     if (updated.count !== 1) {
-      throw new Error(`WORKSPACE_RESOURCE_RETRY_TARGET_CHANGED:${resource.resourceId}`)
+      throw new ApiError('WORKSPACE_RESOURCE_RETRY_TARGET_CHANGED', { resourceId: resource.resourceId })
     }
   }
   await advanceWorkspaceResourceRevisionInTransaction(tx, input)
@@ -493,7 +501,7 @@ export async function resolveWorkspaceResourceInputs(
       resourceKind: 'file',
       deletedAt: null,
     },
-    select: { id: true, workspacePath: true, currentVersion: true, status: true },
+    select: { id: true, workspacePath: true, currentVersion: true, status: true, workflowEnabled: true },
   })
   const byId = new Map(resources.map((resource) => [resource.id, resource]))
   const seenPositions = new Set<string>()
@@ -502,6 +510,9 @@ export async function resolveWorkspaceResourceInputs(
     const resource = byId.get(reference.resourceId)
     if (!resource) {
       throw new Error(`WORKSPACE_RESOURCE_INPUT_NOT_FOUND:${reference.resourceId}`)
+    }
+    if (resource.workflowEnabled === false) {
+      throw new ApiError('WORKSPACE_RESOURCE_DISABLED', { field: 'references', resourceId: resource.id })
     }
     const workspacePath = validateWorkspaceResourceFilePath(resource.workspacePath)
     if (
@@ -528,6 +539,33 @@ export async function resolveWorkspaceResourceInputs(
     resolved.push({ resourceId: resource.id, contentVersion, workspacePath, role, position: reference.position })
   }
   return resolved
+}
+
+/** Check current participation only when accepting NEW work. Frozen jobs keep their inputs. */
+export async function validateWorkspaceResourceWorkflowInputsInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { readonly userId: string; readonly projectId: string },
+  references: readonly Pick<WorkspaceResourceInputRef, 'resourceId'>[],
+): Promise<void> {
+  // Serialize submission and toggles so a plan cannot commit after its input is disabled.
+  await lockOwnedProject(tx, input.projectId, input.userId)
+  if (references.length === 0) return
+  // Locking reads see current committed state even if this transaction already
+  // established a repeatable-read snapshot while authorizing the plan.
+  const ids = [...new Set(references.map((reference) => reference.resourceId))]
+  const rows = await tx.$queryRaw<Array<{ id: string; workflowEnabled: boolean }>>(Prisma.sql`
+    SELECT id, workflowEnabled FROM workspace_resources
+    WHERE id IN (${Prisma.join(ids)}) AND userId = ${input.userId} AND projectId = ${input.projectId}
+      AND resourceKind = 'file' AND deletedAt IS NULL AND activePath IS NOT NULL
+    FOR UPDATE
+  `)
+  for (const id of ids) {
+    const row = rows.find((candidate) => candidate.id === id)
+    if (!row) throw new ApiError('NOT_FOUND', { field: 'references' })
+    if (!row.workflowEnabled) {
+      throw new ApiError('WORKSPACE_RESOURCE_DISABLED', { field: 'references', resourceId: id })
+    }
+  }
 }
 
 export async function validateWorkspaceResourceInputReferencesInTransaction(
@@ -571,6 +609,7 @@ export async function materializeWorkspaceResourceInTransaction(
     readonly mediaType: WorkspaceResourceMediaType
     readonly schemaId: string
     readonly content: WorkspaceResourceMaterializationContent
+    readonly posterMediaId?: string | null
     readonly inputs: readonly WorkspaceResourceInputRef[]
     readonly sourceTurnId?: string | null
     readonly provenance: ResourceProvenance
@@ -632,6 +671,14 @@ export async function materializeWorkspaceResourceInTransaction(
     sizeBytes = media.sizeBytes === null || media.sizeBytes === undefined ? null : BigInt(media.sizeBytes)
     versionContentPreview = workspaceResourceContentPreview(serialized)
   }
+  const posterMediaId = input.posterMediaId?.trim() || null
+  if (posterMediaId !== null) {
+    if (input.mediaType !== 'video') throw new Error('WORKSPACE_RESOURCE_POSTER_VIDEO_REQUIRED')
+    const poster = await tx.mediaObject.findUnique({ where: { id: posterMediaId }, select: { id: true, mimeType: true } })
+    if (!poster || !poster.mimeType?.startsWith('image/')) {
+      throw new Error(`WORKSPACE_RESOURCE_POSTER_MEDIA_INVALID:${resource.id}`)
+    }
+  }
   await tx.workspaceResourceVersion.create({
     data: {
       id: randomUUID(),
@@ -639,6 +686,7 @@ export async function materializeWorkspaceResourceInTransaction(
       version: nextContentVersion,
       contentKind: contentKind(input.content),
       mediaId,
+      posterMediaId,
       sha256,
       sizeBytes,
       contentPreview: versionContentPreview,
@@ -869,7 +917,7 @@ async function requireNoActiveResourceTasks(
     },
     select: { id: true },
   })
-  if (activeTask) throw new Error(`WORKSPACE_RESOURCE_ACTIVE_TASK_CONFLICT:${activeTask.id}`)
+  if (activeTask) throw new ApiError('CONFLICT', { taskId: activeTask.id, reason: 'WORKSPACE_RESOURCE_ACTIVE_TASK_CONFLICT' })
 }
 
 export async function moveWorkspaceResourceInTransaction(
@@ -931,6 +979,37 @@ export async function moveWorkspaceResourceInTransaction(
   }
   await advanceWorkspaceResourceRevisionInTransaction(tx, input)
   return { resourceId: root.id, workspacePath: destinationPath, movedCount: subtree.length }
+}
+
+/** Reversible participation setting; preserves all content, versions and lineage. */
+export async function setWorkspaceResourceWorkflowInTransaction(
+  tx: Prisma.TransactionClient,
+  input: {
+    readonly userId: string
+    readonly projectId: string
+    readonly resourceId: string
+    readonly workflowEnabled: boolean
+  },
+): Promise<{ readonly resourceId: string; readonly workflowEnabled: boolean }> {
+  await lockOwnedProject(tx, input.projectId, input.userId)
+  const [resource] = await tx.$queryRaw<Array<{ id: string; workflowEnabled: boolean; status: string }>>(Prisma.sql`
+    SELECT id, workflowEnabled, status FROM workspace_resources
+    WHERE id = ${input.resourceId} AND userId = ${input.userId} AND projectId = ${input.projectId}
+      AND resourceKind = 'file' AND deletedAt IS NULL AND activePath IS NOT NULL
+    FOR UPDATE
+  `)
+  if (!resource) throw new ApiError('NOT_FOUND')
+  if (Boolean(resource.workflowEnabled) !== input.workflowEnabled) {
+    if (resource.status === 'pending') {
+      throw new ApiError('WORKSPACE_RESOURCE_WORKFLOW_BUSY')
+    }
+    await requireNoActiveResourceTasks(tx, [resource.id])
+    await tx.workspaceResource.update({
+      where: { id: resource.id }, data: { workflowEnabled: input.workflowEnabled },
+    })
+    await advanceWorkspaceResourceRevisionInTransaction(tx, input)
+  }
+  return { resourceId: resource.id, workflowEnabled: input.workflowEnabled }
 }
 
 export async function softDeleteWorkspaceResourceInTransaction(

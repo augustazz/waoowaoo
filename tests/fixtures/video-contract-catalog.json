@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "families": [
+    {
+      "id": "seedance-gateway",
+      "revision": 1,
+      "source": "https://video.example.test/video-guide",
+      "aspectRatios": [
+        "1:1",
+        "16:9",
+        "9:16",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "capabilities": {
+        "supportedInputModes": [
+          "text_to_video",
+          "first_frame",
+          "first_last_frame",
+          "reference"
+        ],
+        "supportsTextToVideo": true,
+        "generationModeOptions": [
+          "normal",
+          "firstlastframe"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "firstFrameAspectRatio": "selected",
+        "firstlastframe": true,
+        "maxReferenceImages": 1,
+        "maxReferenceFiles": 1
+      },
+      "audio": {
+        "output": "unknown",
+        "control": "unavailable",
+        "default": "unknown"
+      }
+    },
+    {
+      "id": "wan30",
+      "revision": 1,
+      "source": "https://docs.qwencloud.com/openapi-wan30-video.json",
+      "aspectRatios": [
+        "1:1",
+        "16:9",
+        "9:16",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "capabilities": {
+        "supportedInputModes": [
+          "text_to_video",
+          "first_frame",
+          "first_last_frame",
+          "reference"
+        ],
+        "supportsTextToVideo": true,
+        "generationModeOptions": [
+          "normal",
+          "firstlastframe"
+        ],
+        "durationOptions": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30
+        ],
+        "firstFrameAspectRatio": "selected",
+        "firstlastframe": true,
+        "maxReferenceImages": 10,
+        "maxReferenceFiles": 20,
+        "supportGenerateAudio": true,
+        "generateAudioOptions": [],
+        "assetReferenceMultiReference": true,
+        "maxReferenceAudios": 5,
+        "maxReferenceVideos": 5,
+        "referenceAudioRequiresVisual": false,
+        "minReferenceAudioDurationMs": 1000,
+        "maxReferenceAudioDurationMs": 15000,
+        "maxTotalReferenceAudioDurationMs": 15000,
+        "minReferenceVideoDurationMs": 1000,
+        "maxReferenceVideoDurationMs": 15000,
+        "maxTotalReferenceVideoDurationMs": 15000,
+        "maxReferenceVideoAndOutputDurationMs": 30000,
+        "referenceVideoMimeTypes": [
+          "video/mp4",
+          "video/quicktime"
+        ]
+      },
+      "audio": {
+        "output": "native",
+        "control": "unavailable",
+        "default": "on"
+      },
+      "promptMaxChars": 20000
+    }
+  ],
+  "channels": [
+    {
+      "id": "example-json-v1",
+      "revision": 1,
+      "protocol": "json-videos-v1",
+      "baseUrl": "https://video.example.test/v1",
+      "source": "https://video.example.test/video-guide",
+      "models": [
+        {
+          "modelId": "seedance-example-480p",
+          "family": "seedance-gateway",
+          "resolutionOptions": [
+            "480p"
+          ]
+        },
+        {
+          "modelId": "seedance-example-720p",
+          "family": "seedance-gateway",
+          "resolutionOptions": [
+            "720p"
+          ]
+        },
+        {
+          "modelId": "seedance-example-v2-720p",
+          "family": "seedance-gateway",
+          "resolutionOptions": [
+            "720p"
+          ]
+        },
+        {
+          "modelId": "seedance-example-v3-720p",
+          "family": "seedance-gateway",
+          "resolutionOptions": [
+            "720p"
+          ]
+        },
+        {
+          "modelId": "wan3.0-video-480p",
+          "family": "wan30",
+          "resolutionOptions": [
+            "480p"
+          ]
+        },
+        {
+          "modelId": "wan3.0-prime-720p",
+          "family": "wan30",
+          "resolutionOptions": [
+            "720p"
+          ]
+        },
+        {
+          "modelId": "wan3.0-prime-1080p",
+          "family": "wan30",
+          "resolutionOptions": [
+            "1080p"
+          ]
+        }
+      ]
+    }
+  ]
+}

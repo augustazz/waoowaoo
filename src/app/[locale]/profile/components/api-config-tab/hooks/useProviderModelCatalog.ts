@@ -77,6 +77,7 @@ export function useProviderModelCatalog({ providers, saveStatus, flushConfig }: 
       return types.filter(type => provider.modelTypes?.includes(type)).map(type => ({
         modelId: model.id, name: model.name, modelKey: encodeModelKey(provider.id, model.id),
         provider: provider.id, type, enabled: false,
+        ...(type === 'video' ? { videoAvailability: model.videoAvailability } : {}),
         unclassified: model.classification === 'unknown',
       } satisfies CustomModel & { unclassified: boolean }))
     })

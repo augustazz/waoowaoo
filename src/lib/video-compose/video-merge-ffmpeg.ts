@@ -89,3 +89,27 @@ export async function concatVideoClips(input: {
     expectedDurationSeconds: input.durationSeconds,
   })
 }
+
+/** Extract one deterministic poster frame from the rendered timeline. */
+export async function extractVideoPosterFrame(input: {
+  readonly sourcePath: string
+  readonly outputPath: string
+  readonly timestampSeconds: number
+  readonly durationSeconds: number
+}): Promise<void> {
+  const frame = Math.round(input.timestampSeconds * VIDEO_MERGE_FPS)
+  if (!Number.isSafeInteger(frame) || frame < 0 || frame >= Math.round(input.durationSeconds * VIDEO_MERGE_FPS)) {
+    throw new Error('WORKSPACE_RESOURCE_VIDEO_MERGE_POSTER_FRAME_INVALID')
+  }
+  await runFfmpegCommand('ffmpeg', [
+    '-y',
+    '-i', input.sourcePath,
+    '-frames:v', '1',
+    '-q:v', '2',
+    '-vf', `select=eq(n\\,${frame}),format=yuv420p`,
+    input.outputPath,
+  ], {
+    stage: 'workspace_resource_video_merge_extract_poster',
+    expectedDurationSeconds: input.timestampSeconds + 1,
+  })
+}

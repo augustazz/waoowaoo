@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { videoExecutionContractSchema } from '@/lib/ai-registry/video-execution-contract-schema'
 import { taskRuntimePayloadEnvelopeShape } from '@/lib/task/progress-payload'
 import { musicScoreGenerationOptionsSchema } from '@/lib/music/score-specification'
 import type { WorkspaceResourceJsonValue } from './contracts'
@@ -10,6 +11,8 @@ export const workspaceResourceInputRefSchema = z.object({
   workspacePath: z.string().trim().min(1).max(512),
   role: z.string().trim().min(1).max(64),
   position: z.number().int().nonnegative(),
+  channel: z.enum(['context', 'image', 'audio', 'video']).optional(),
+  purpose: z.enum(['identity', 'scene', 'continuity', 'prop', 'style']).optional(),
 }).strict()
 
 const workspaceResourceJsonValueSchema: z.ZodType<WorkspaceResourceJsonValue> = z.lazy(() => z.union([
@@ -62,9 +65,17 @@ const frozenResourceSchema = z.object({
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['inputs'], message: `Unknown provider input position ${String(position)}.` })
     }
   }
+  for (const input of resource.inputs) {
+    if (!input.channel) continue // Legacy frozen Tasks use only the position arrays.
+    const actual = resource.imageInputPositions.includes(input.position) ? 'image'
+      : resource.audioInputPositions.includes(input.position) ? 'audio'
+        : resource.videoInputPositions.includes(input.position) ? 'video' : 'context'
+    if (input.channel !== actual) context.addIssue({ code: z.ZodIssueCode.custom, path: ['inputs'], message: 'Frozen input channel must match its provider position.' })
+  }
 })
 
 export const workspaceResourceGenerationTaskPayloadSchema = z.object({
+  videoExecutionContract: videoExecutionContractSchema.optional(),
   lifecycleProjection: workspaceResourceLifecycleProjectionSchema,
   protocol: z.literal('workspace_resource_generation_v2'),
   resource: frozenResourceSchema,
@@ -78,6 +89,9 @@ export const workspaceResourceGenerationTaskPayloadSchema = z.object({
   count: z.literal(1),
   generationOptions: workspaceResourceGenerationOptionsSchema,
 }).strict().superRefine((payload, context) => {
+  if (payload.videoExecutionContract && (payload.resource.mediaType !== 'video' || payload.videoExecutionContract.modelKey !== payload.resource.modelKey)) {
+    context.addIssue({ code: 'custom', path: ['videoExecutionContract'], message: 'Video contract must match the frozen video model.' })
+  }
   if (payload.resource.mediaType === 'audio') {
     const isMusic = Boolean(payload.musicModel)
     const isVoice = Boolean(payload.voiceModel)
@@ -188,6 +202,7 @@ export function parseWorkspaceResourceGenerationTaskPayload(
     resource: parsed.resource,
     imageModel: parsed.imageModel,
     videoModel: parsed.videoModel,
+    ...(parsed.videoExecutionContract ? { videoExecutionContract: parsed.videoExecutionContract } : {}),
     musicModel: parsed.musicModel,
     voiceModel: parsed.voiceModel,
     previewText: parsed.previewText,
@@ -208,6 +223,7 @@ export function parseWorkspaceResourceGenerationRetrySource(
 ): WorkspaceResourceGenerationRetrySource {
   const parsed = workspaceResourceGenerationRetrySourceEnvelopeSchema.parse(value)
   return workspaceResourceGenerationRetrySourceSchema.parse({
+    ...(parsed.videoExecutionContract ? { videoExecutionContract: parsed.videoExecutionContract } : {}),
     lifecycleProjection: parsed.lifecycleProjection,
     protocol: parsed.protocol,
     resource: parsed.resource,

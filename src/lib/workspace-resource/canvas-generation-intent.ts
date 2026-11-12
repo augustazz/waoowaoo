@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { imageItemReferences } from './image-provenance'
 import { generationAspectRatioSchema, generationReferenceSchema, type GenerationItem } from './generation-request'
 
 /** User selections belong to one admitted canvas Turn, not model-authored tool arguments. */
@@ -50,7 +51,7 @@ export function assertCanvasGenerationIntentItems(intent: CanvasGenerationIntent
     if ((item.folderPath ?? null) !== intent.folderPath) issue([...path, 'folderPath'], `Preserve the canvas destination: ${JSON.stringify(intent.folderPath)}.`)
     if (item.mediaType === 'image' && item.assetKind !== null) issue([...path, 'assetKind'], 'Canvas image requests are ordinary images: use assetKind null and a non-asset image schema; preserve the selected aspect ratio.')
     if (item.mediaType === 'video' && item.durationSeconds !== intent.durationSeconds) issue([...path, 'durationSeconds'], `Preserve the canvas duration: ${intent.durationSeconds}.`)
-    const actual = item.references ?? []
+    const actual = item.mediaType === 'image' ? imageItemReferences(item) : item.references ?? []
     if (actual.length !== intent.references.length || intent.references.some((reference, position) => {
       const candidate = actual[position]
       return !candidate || reference.resourceId !== candidate.resourceId || reference.contentVersion !== candidate.contentVersion || reference.role !== candidate.role || reference.channel !== candidate.channel

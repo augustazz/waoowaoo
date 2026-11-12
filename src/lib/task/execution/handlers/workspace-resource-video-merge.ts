@@ -19,6 +19,7 @@ import {
 } from '@/lib/video-compose/ffmpeg-command'
 import {
   concatVideoClips,
+  extractVideoPosterFrame,
   normalizeVideoClip,
   probeVideoDimensions,
 } from '@/lib/video-compose/video-merge-ffmpeg'
@@ -129,6 +130,13 @@ export async function handleWorkspaceResourceVideoMergeTask(
     if (Math.abs(stitchedDurationSeconds - totalDurationSeconds) > 0.001 || actualDimensions.width !== dimensions.width || actualDimensions.height !== dimensions.height) {
       throw new Error('WORKSPACE_RESOURCE_VIDEO_MERGE_OUTPUT_SPEC_MISMATCH')
     }
+    const posterPath = path.join(workspaceDir, 'poster.jpg')
+    await extractVideoPosterFrame({
+      sourcePath: stitchedPath,
+      outputPath: posterPath,
+      timestampSeconds: (payload.resource.edit.cover?.timestampFrame ?? 0) / VIDEO_MERGE_FPS,
+      durationSeconds: stitchedDurationSeconds,
+    })
     const mainAudioPath = path.join(workspaceDir, 'audio.wav')
     if (payload.resource.edit.audioMode === 'preserve') await concatVideoMergeAudioClips({
       runCommand: createFfmpegCommandRunner({
@@ -195,8 +203,25 @@ export async function handleWorkspaceResourceVideoMergeTask(
       height: dimensions.height,
       durationMs: Math.round(stitchedDurationSeconds * 1000),
     })
+    const posterBuffer = await readFile(posterPath)
+    const posterStorageKey = await uploadObject(
+      posterBuffer,
+      buildTaskArtifactStorageKey({
+        taskId: data.taskId,
+        artifact: `workspace-resource-video-merge-poster:${payload.resource.resourceId}`,
+        extension: 'jpg',
+      }),
+      'image/jpeg',
+    )
+    const poster = await ensureMediaObjectFromStorageKey(posterStorageKey, {
+      mimeType: 'image/jpeg',
+      sizeBytes: posterBuffer.byteLength,
+      width: dimensions.width,
+      height: dimensions.height,
+    })
     return {
       mediaId: media.id,
+      posterMediaId: poster.id,
       videoUrl: media.url,
       storageKey: media.storageKey,
       durationMs: Math.round(stitchedDurationSeconds * 1000),

@@ -1,6 +1,7 @@
 import { createScopedLogger } from '@/lib/logging/core'
 import { requireSelectedModelId } from '@/lib/ai-providers/shared/model-selection'
-import { FAL_GPT_IMAGE_2_MODEL_ID } from '@/lib/ai-providers/fal/models'
+import { FAL_GPT_IMAGE_2_MODEL_ID, falImageReferenceLimit } from '@/lib/ai-providers/fal/models'
+import { assertImageReferenceCount } from '@/lib/ai-providers/shared/image-reference-validation'
 import { submitFalQueueRequest } from '@/lib/ai-providers/fal/submission'
 import type {
   GptImage2ImageSize,
@@ -68,6 +69,7 @@ export async function executeFalImageGeneration(input: AiProviderImageExecutionC
   const resolution = options.resolution
   const outputFormat = options.outputFormat
   const modelId = requireSelectedModelId(input.selection, 'fal:image')
+  assertImageReferenceCount('fal', referenceImages, falImageReferenceLimit(modelId))
 
   const hasReferenceImages = referenceImages.length > 0
   const endpointConfig = FAL_IMAGE_ENDPOINTS[modelId]

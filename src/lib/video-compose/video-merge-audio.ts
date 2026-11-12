@@ -60,9 +60,17 @@ function parseLoudnormNumber(value: unknown): number | null {
 }
 
 function parseLoudnormMeasurement(stderr: string): AudioLoudnessMeasurement {
-  const match = /\{[\s\S]*"input_i"[\s\S]*?\}/.exec(stderr)
+  // FFmpeg also prints arbitrary source metadata to stderr. Start at the
+  // loudnorm object's first key, never at an earlier metadata/log brace.
+  // Loudnorm emits a flat object of numeric strings, with input_i first.
+  const match = /\{\s*"input_i"\s*:[^{}]*\}/.exec(stderr)
   if (!match) throw new Error('VIDEO_MERGE_LOUDNESS_ANALYSIS_FAILED')
-  const parsed = JSON.parse(match[0]) as unknown
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(match[0]) as unknown
+  } catch (cause) {
+    throw new Error('VIDEO_MERGE_LOUDNESS_ANALYSIS_FAILED', { cause })
+  }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('VIDEO_MERGE_LOUDNESS_ANALYSIS_FAILED')
   }

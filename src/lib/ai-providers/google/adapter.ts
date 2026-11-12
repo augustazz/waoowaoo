@@ -6,6 +6,7 @@ import {
   enumValidator,
   integerRangeValidator,
   nonEmptyStringValidator,
+  stringArrayValidator,
 } from '@/lib/ai-providers/shared/option-schema'
 import { googleConnectionTester, googleFailureAdapter } from './connection-test'
 import { executeGoogleImageGeneration } from './image'
@@ -15,7 +16,7 @@ import {
 } from './language-model'
 import { executeGoogleMusicGeneration } from './music'
 import { executeGoogleVideoGeneration } from './video'
-import { GOOGLE_BUILTIN_CAPABILITY_CATALOG_ENTRIES } from './models'
+import { GOOGLE_BUILTIN_CAPABILITY_CATALOG_ENTRIES, googleImageReferenceLimit } from './models'
 
 function describeGoogleMediaVariant(
   modality: 'image' | 'video' | 'music',
@@ -41,7 +42,9 @@ function describeGoogleMediaVariant(
           outputFormat: enumValidator(['mp3', 'wav']),
         },
       })
-      : modality === 'video' ? googleVideoOptions(selection.modelId) : buildMediaOptionSchema(modality),
+      : modality === 'video' ? googleVideoOptions(selection.modelId) : buildMediaOptionSchema(modality, {
+        validators: { referenceImages: stringArrayValidator({ maxLength: googleImageReferenceLimit(selection.modelId) ?? 0 }) },
+      }),
   })
 }
 

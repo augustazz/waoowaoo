@@ -1,6 +1,6 @@
 import { getDeploymentConfig, type ProviderMediaInputTransport } from '@/lib/deployment/config'
 import type { AiProviderRoute, AiProviderRouteSet } from '@/lib/ai-registry/provider-route-set'
-import { parseModelKeyStrict } from '@/lib/ai-registry/selection'
+import { getProviderKey, parseModelKeyStrict } from '@/lib/ai-registry/selection'
 import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/ai-registry/capabilities-catalog'
 import type {
   AiResolvedSelection,
@@ -87,7 +87,7 @@ function supportsTransport(input: {
   mediaKind: ProviderMediaInputKind
   transport: ProviderMediaInputTransport
 }): boolean {
-  const contract = CONTRACT_BY_PROVIDER_MODALITY.get(`${input.provider}:${input.modality}`)
+  const contract = CONTRACT_BY_PROVIDER_MODALITY.get(`${getProviderKey(input.provider)}:${input.modality}`)
   return contract?.transports[input.mediaKind]?.includes(input.transport) === true
 }
 

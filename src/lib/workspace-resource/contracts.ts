@@ -100,6 +100,8 @@ export interface WorkspaceResourceRef {
 export interface WorkspaceResourceInputRef extends WorkspaceResourceRef {
   readonly role: string
   readonly position: number
+  readonly channel?: 'context' | 'image' | 'audio' | 'video'
+  readonly purpose?: 'identity' | 'scene' | 'continuity' | 'prop' | 'style'
 }
 
 export type WorkspaceResourceContent =
@@ -113,6 +115,7 @@ export type WorkspaceResourceContent =
       readonly width: number | null
       readonly height: number | null
       readonly durationMs: number | null
+      readonly posterUrl?: string | null
     }
 
 /** Full text of a version's content for display; null for media content. */
@@ -161,6 +164,7 @@ export type WorkspaceResourceSummaryView =
       readonly width: number | null
       readonly height: number | null
       readonly durationMs: number | null
+      readonly posterUrl?: string | null
     }
 
 export interface WorkspaceResourceAncestorView {
@@ -170,16 +174,18 @@ export interface WorkspaceResourceAncestorView {
 }
 
 export interface WorkspaceResourceInputSummary extends WorkspaceResourceInputRef {
+  readonly workflowEnabled: boolean
   readonly durationMs: number | null
   readonly resourceKind: 'file'
   readonly mediaType: WorkspaceResourceMediaType
   readonly schemaId: string
   readonly name: string
   readonly previewUrl: string | null
+  readonly posterUrl?: string | null
 }
 
 export interface WorkspaceResourceActionView {
-  readonly kind: 'retry' | 'regenerate' | 'download' | 'delete'
+  readonly kind: 'retry' | 'regenerate' | 'download' | 'delete' | 'toggle_workflow'
   readonly enabled: boolean
   readonly operationId: string | null
   readonly input: WorkspaceResourceJsonObject | null
@@ -195,8 +201,11 @@ export interface WorkspaceResourceAlternativeMemberView {
   readonly schemaId: string
   readonly mediaType: WorkspaceResourceMediaType | null
   readonly status: WorkspaceResourceStatus
+  /** Disabled resources stay visible for comparison but cannot feed new workflow work. */
+  readonly workflowEnabled?: boolean
   readonly memberIndex: number
   readonly previewUrl: string | null
+  readonly posterUrl?: string | null
 }
 
 export interface WorkspaceResourceAlternativeGroupView {
@@ -215,6 +224,8 @@ export interface WorkspaceResourceView {
   readonly schemaId: string
   readonly name: string
   readonly status: WorkspaceResourceStatus
+  /** Disabled resources stay visible for comparison but cannot feed new workflow work. */
+  readonly workflowEnabled?: boolean
   /** Folders are versionless and always expose 0. */
   readonly contentVersion: number
   readonly current: WorkspaceResourceVersionView | null

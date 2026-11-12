@@ -233,7 +233,7 @@ model Project {
   description               String?                          @db.Text
   userId                    String
   workspaceResourceRevision Int                              @default(0)
-  videoRatio                String?
+  videoRatio                String?                          @default("16:9")
   videoResolution           String                           @default("720p")
   imageResolution           String                           @default("2K")
   createdAt                 DateTime                         @default(now())
@@ -952,7 +952,8 @@ model MediaObject {
   globalCharacterAppearancePreviousImgs GlobalCharacterAppearance[] @relation("GlobalCharacterAppearancePreviousImageMedia")
   globalLocationImageImages             GlobalLocationImage[]       @relation("GlobalLocationImageMedia")
   globalLocationImagePreviousImages     GlobalLocationImage[]       @relation("GlobalLocationImagePreviousImageMedia")
-  workspaceResourceVersions             WorkspaceResourceVersion[]
+  workspaceResourceVersions             WorkspaceResourceVersion[] @relation("WorkspaceResourceContentMedia")
+  workspaceResourcePosterVersions       WorkspaceResourceVersion[] @relation("WorkspaceResourcePosterMedia")
 
   @@index([createdAt])
   @@map("media_objects")
@@ -969,6 +970,7 @@ model WorkspaceResource {
   schemaId                    String                     @db.VarChar(96)
   name                        String                     @db.VarChar(191)
   status                      String                     @default("pending") @db.VarChar(32)
+  workflowEnabled             Boolean                    @default(true)
   currentVersion              Int                        @default(0)
   sourceType                  String?                    @db.VarChar(96)
   sourceId                    String?                    @db.VarChar(191)
@@ -1056,6 +1058,7 @@ model WorkspaceResourceVersion {
   version        Int
   contentKind    String            @db.VarChar(16)
   mediaId        String
+  posterMediaId  String?
   sha256         String?           @db.VarChar(64)
   sizeBytes      BigInt?
   /// Bounded text/structured preview materialized at write time so tree
@@ -1064,10 +1067,12 @@ model WorkspaceResourceVersion {
   sourceTurnId   String?           @db.VarChar(191)
   createdAt      DateTime          @default(now())
   resource       WorkspaceResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  media          MediaObject       @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+  media          MediaObject       @relation("WorkspaceResourceContentMedia", fields: [mediaId], references: [id], onDelete: Restrict)
+  posterMedia    MediaObject?      @relation("WorkspaceResourcePosterMedia", fields: [posterMediaId], references: [id], onDelete: Restrict)
 
   @@unique([resourceId, version], map: "workspace_resource_versions_resource_version_key")
   @@index([mediaId], map: "workspace_resource_versions_media_idx")
+  @@index([posterMediaId], map: "workspace_resource_versions_poster_media_idx")
   @@map("workspace_resource_versions")
 }
 

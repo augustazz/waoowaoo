@@ -6,6 +6,15 @@ import type { ProductionImageModel, ProductionVideoModel, ProductionMusicModel, 
 export function requireProductionModel(context: ProjectProductionContext, modality: MediaModelType): string {
   const capabilities = context.productionCapabilities
   const models = modality === 'video' ? capabilities.video.models : capabilities[modality]
+  const unavailableVideo = modality === 'video' ? capabilities.video.unavailableModels?.[0] : null
+  if (models.length === 0 && unavailableVideo) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'PRODUCTION_MODEL_CAPABILITIES_UNAVAILABLE',
+      field: 'configuration', modality, reason: unavailableVideo.reason,
+      message: `The selected video model ${unavailableVideo.name} is unavailable (${unavailableVideo.reason}). Select a ready model or correct its verified capability/channel contract. Start a new turn after configuration changes.`,
+      agentRetryableAfterCorrection: false,
+    })
+  }
   if (models.length !== 1) {
     throw new ApiError('INVALID_PARAMS', {
       code: models.length === 0 ? 'DEFAULT_MEDIA_MODEL_NOT_CONFIGURED' : 'DEFAULT_MEDIA_MODEL_AMBIGUOUS',

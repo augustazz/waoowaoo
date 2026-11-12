@@ -93,6 +93,7 @@ function MediaBody({
       return (
         <video
           src={summary.url}
+          poster={summary.posterUrl ?? undefined}
           aria-label={resource.name}
           controls
           preload="metadata"

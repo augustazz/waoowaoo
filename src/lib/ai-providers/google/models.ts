@@ -13,14 +13,14 @@ export const GOOGLE_BUILTIN_CAPABILITY_CATALOG_ENTRIES = [
   { modelType: 'llm', provider: 'google', modelId: 'gemini-3-pro-preview', capabilities: { llm: { protocol: 'google-generative-ai', publicReasoningMode: 'native', reasoningEffortOptions: ['low', 'medium', 'high'], defaultReasoningEffort: 'medium' } } },
   { modelType: 'llm', provider: 'google', modelId: 'gemini-3.1-flash-lite-preview', capabilities: { llm: { protocol: 'google-generative-ai', publicReasoningMode: 'native', reasoningEffortOptions: ['minimal', 'low', 'medium', 'high'], defaultReasoningEffort: 'medium' } } },
   { modelType: 'llm', provider: 'google', modelId: GOOGLE_GEMINI_3_5_FLASH_MODEL_ID, capabilities: { llm: { protocol: 'google-generative-ai', publicReasoningMode: 'native', reasoningEffortOptions: ['minimal', 'low', 'medium', 'high'], defaultReasoningEffort: 'medium' } } },
-  { modelType: 'image', provider: 'google', modelId: 'gemini-3-pro-image-preview', capabilities: { image: { resolutionOptions: ['1K', '2K', '4K'] } } },
-  { modelType: 'image', provider: 'google', modelId: 'gemini-3-pro-image-preview-batch', capabilities: { image: { resolutionOptions: ['1K', '2K', '4K'] } } },
-  { modelType: 'image', provider: 'google', modelId: 'gemini-3.1-flash-image-preview', capabilities: { image: { resolutionOptions: ['0.5K', '1K', '2K', '4K'] } } },
-  { modelType: 'image', provider: 'google', modelId: 'gemini-2.5-flash-image', capabilities: { image: { resolutionOptions: ['1K'] } } },
-  { modelType: 'image', provider: 'google', modelId: 'gemini-2.5-flash-image-preview', capabilities: { image: { resolutionOptions: ['1K'] } } },
-  { modelType: 'image', provider: 'google', modelId: 'imagen-4.0-generate-001', capabilities: { image: {} } },
-  { modelType: 'image', provider: 'google', modelId: 'imagen-4.0-fast-generate-001', capabilities: { image: {} } },
-  { modelType: 'image', provider: 'google', modelId: 'imagen-4.0-ultra-generate-001', capabilities: { image: {} } },
+  { modelType: 'image', provider: 'google', modelId: 'gemini-3-pro-image-preview', capabilities: { image: { maxReferenceImages: 14, resolutionOptions: ['1K', '2K', '4K'] } } },
+  { modelType: 'image', provider: 'google', modelId: 'gemini-3-pro-image-preview-batch', capabilities: { image: { maxReferenceImages: 14, resolutionOptions: ['1K', '2K', '4K'] } } },
+  { modelType: 'image', provider: 'google', modelId: 'gemini-3.1-flash-image-preview', capabilities: { image: { maxReferenceImages: 14, resolutionOptions: ['0.5K', '1K', '2K', '4K'] } } },
+  { modelType: 'image', provider: 'google', modelId: 'gemini-2.5-flash-image', capabilities: { image: { maxReferenceImages: 3, resolutionOptions: ['1K'] } } },
+  { modelType: 'image', provider: 'google', modelId: 'gemini-2.5-flash-image-preview', capabilities: { image: { maxReferenceImages: 3, resolutionOptions: ['1K'] } } },
+  { modelType: 'image', provider: 'google', modelId: 'imagen-4.0-generate-001', capabilities: { image: { maxReferenceImages: 0 } } },
+  { modelType: 'image', provider: 'google', modelId: 'imagen-4.0-fast-generate-001', capabilities: { image: { maxReferenceImages: 0 } } },
+  { modelType: 'image', provider: 'google', modelId: 'imagen-4.0-ultra-generate-001', capabilities: { image: { maxReferenceImages: 0 } } },
   {
     modelType: 'music',
     provider: 'google',
@@ -110,6 +110,11 @@ export const GOOGLE_API_CONFIG_CATALOG_MODELS = [
 
 export const GOOGLE_COMPATIBLE_API_CONFIG_CATALOG_MODELS = GOOGLE_API_CONFIG_CATALOG_MODELS
   .filter((model) => !model.modelId.endsWith('-batch') && model.type !== 'music')
+
+export function googleImageReferenceLimit(modelId: string): number | undefined {
+  const entry = GOOGLE_BUILTIN_CAPABILITY_CATALOG_ENTRIES.find((entry) => entry.modelType === 'image' && entry.modelId === modelId)
+  return entry && 'image' in entry.capabilities ? entry.capabilities.image.maxReferenceImages : undefined
+}
 
 function googleTokenPricing(input: number, output: number) {
   return {

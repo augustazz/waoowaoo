@@ -1,12 +1,11 @@
 import { GoogleGenAI } from '@google/genai'
-import { getInternalBaseUrl } from '@/lib/env'
-import { normalizeGeminiImageSize } from '@/lib/ai-providers/shared/google-image-helpers'
+import { loadGoogleImageReferences, normalizeGeminiImageSize } from '@/lib/ai-providers/shared/google-image-helpers'
 import { asUnknownObject, getErrorMessage, type UnknownObject } from '@/lib/ai-providers/shared/helpers'
 import { withProviderProxyDispatcher } from '@/lib/http/outbound-proxy'
 import { GOOGLE_PROVIDER_PROXY_TARGET } from '@/lib/ai-providers/google/proxy-target'
-import { getImageBase64Cached } from '@/lib/image-cache'
 import { logInternal } from '@/lib/logging/semantic'
 import { AppError } from '@/lib/errors/app-error'
+import { googleImageReferenceLimit } from './models'
 
 type GeminiBatchClient = {
   batches: {
@@ -25,48 +24,9 @@ export async function submitGeminiBatch(
 
   try {
     const ai = new GoogleGenAI({ apiKey })
-    const contentParts: GeminiBatchContentPart[] = []
-    const referenceImages = options?.referenceImages || []
-    for (let index = 0; index < Math.min(referenceImages.length, 14); index += 1) {
-      const imageData = referenceImages[index]
-      if (!imageData) continue
-
-      if (imageData.startsWith('data:')) {
-        const base64Start = imageData.indexOf(';base64,')
-        if (base64Start !== -1) {
-          contentParts.push({
-            inlineData: {
-              mimeType: imageData.substring(5, base64Start),
-              data: imageData.substring(base64Start + 8),
-            },
-          })
-        }
-        continue
-      }
-
-      if (imageData.startsWith('http') || imageData.startsWith('/')) {
-        try {
-          const fullUrl = imageData.startsWith('/') ? `${getInternalBaseUrl()}${imageData}` : imageData
-          const base64DataUrl = await getImageBase64Cached(fullUrl)
-          const base64Start = base64DataUrl.indexOf(';base64,')
-          if (base64Start !== -1) {
-            contentParts.push({
-              inlineData: {
-                mimeType: base64DataUrl.substring(5, base64Start),
-                data: base64DataUrl.substring(base64Start + 8),
-              },
-            })
-          }
-        } catch (error: unknown) {
-          logInternal('GeminiBatch', 'WARN', `下载参考图片 ${index + 1} 失败`, {
-            error: getErrorMessage(error),
-          })
-        }
-        continue
-      }
-
-      contentParts.push({ inlineData: { mimeType: 'image/png', data: imageData } })
-    }
+    const contentParts: GeminiBatchContentPart[] = await loadGoogleImageReferences(
+      options?.referenceImages ?? [], googleImageReferenceLimit('gemini-3-pro-image-preview-batch'),
+    )
 
     contentParts.push({ text: prompt })
     const imageConfig: UnknownObject = {}

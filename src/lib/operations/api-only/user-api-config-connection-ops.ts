@@ -6,7 +6,7 @@ import { getProviderConfig } from '@/lib/user-api/runtime-config'
 import { assertUserProviderConfigurationAvailable } from '@/lib/user-api/availability'
 import { listUserProviderModels } from '@/lib/user-api/provider-model-discovery'
 
-const providerModelsInputSchema = z.object({ providerId: z.string().trim().min(1).max(128) }).strict()
+const providerModelsInputSchema = z.object({ providerId: z.string().trim().min(1).max(128), videoModelId: z.string().trim().min(1).max(160).optional() }).strict()
 
 const providerDiagnosticInputSchema = z.object({
   providerId: z.string().trim().min(1),
@@ -28,7 +28,7 @@ export function createUserApiConfigConnectionDiagnosticOperations(): ProjectAgen
       outputSchema: z.unknown(),
       execute: async (ctx, input) => {
         const parsed = providerModelsInputSchema.parse(input)
-        return listUserProviderModels(ctx.userId, parsed.providerId)
+        return listUserProviderModels(ctx.userId, parsed.providerId, parsed.videoModelId)
       },
     },
     api_user_api_config_test_connection: {

@@ -113,7 +113,7 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   async getSignedObjectUrl(params: SignedUrlParams): Promise<string> {
-    if (this.mediaObjectDelivery !== 'signed-https') {
+    if (this.mediaObjectDelivery !== 'signed-https' && this.config.providerMediaInputTransport !== 'public-https') {
       throw new Error('S3_SIGNED_URL_DELIVERY_UNAVAILABLE')
     }
     const url = await getSignedUrl(

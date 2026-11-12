@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "families": [
+    {
+      "id": "example-text-video",
+      "revision": 1,
+      "source": "https://docs.example.com/video",
+      "aspectRatios": [
+        "16:9",
+        "9:16"
+      ],
+      "capabilities": {
+        "supportedInputModes": [
+          "text_to_video"
+        ],
+        "supportsTextToVideo": true,
+        "durationOptions": [
+          5
+        ],
+        "generationModeOptions": [
+          "normal"
+        ]
+      },
+      "audio": {
+        "output": "unknown",
+        "control": "unavailable",
+        "default": "unknown"
+      }
+    }
+  ],
+  "channels": [
+    {
+      "id": "example-channel",
+      "revision": 1,
+      "protocol": "json-videos-v1",
+      "provider": "openai-compatible:replace-with-provider-id",
+      "baseUrl": "https://video.example.com/v1",
+      "source": "https://docs.example.com/video",
+      "models": [
+        {
+          "modelId": "replace-with-model-id",
+          "family": "example-text-video",
+          "resolutionOptions": [
+            "720p"
+          ]
+        }
+      ]
+    }
+  ]
+}

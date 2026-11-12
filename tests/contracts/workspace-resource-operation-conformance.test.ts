@@ -137,7 +137,7 @@ describe('WorkspaceResource Operation registry conformance', () => {
     }).success).toBe(false)
   })
 
-  it('requires complete reusable-asset identity while the server owns framing', () => {
+  it('requires complete reusable-asset identity and allows an explicit frame override in options', () => {
     const batch = {
       schemaVersion: 2 as const,
       outputKind: 'asset_generation_batch' as const,
@@ -160,6 +160,10 @@ describe('WorkspaceResource Operation registry conformance', () => {
       warnings: [],
     }
     expect(assetGenerationBatchOutputSchema.safeParse(batch).success).toBe(true)
+    expect(assetGenerationBatchOutputSchema.safeParse({
+      ...batch,
+      items: [{ ...batch.items[0], options: { aspectRatio: '9:16' } }],
+    }).success).toBe(true)
     expect(assetGenerationBatchOutputSchema.safeParse({
       ...batch,
       items: [{ ...batch.items[0], aspectRatio: '4:3' }],

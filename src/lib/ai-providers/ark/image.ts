@@ -10,6 +10,7 @@ import {
 } from '@/lib/ai-providers/failure'
 import { throwArkSubmissionError } from './error'
 import { requireArkImageModelSpec } from './image-models'
+import { assertImageReferenceCount } from '@/lib/ai-providers/shared/image-reference-validation'
 
 const DEFAULT_TIMEOUT_MS = 60 * 1000
 
@@ -100,6 +101,7 @@ export async function executeArkImageGeneration(input: AiProviderImageExecutionC
   if (!baseUrl) throw new Error('PROVIDER_BASE_URL_MISSING: ark (image)')
   const modelId = requireSelectedModelId(input.selection, 'ark:image')
   const spec = requireArkImageModelSpec(modelId)
+  assertImageReferenceCount('ark', options.referenceImages ?? [], spec.maxReferenceImages)
 
   const arkData = await arkImageGeneration({
     model: spec.modelId,

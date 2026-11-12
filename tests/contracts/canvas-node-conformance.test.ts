@@ -64,7 +64,7 @@ describe('workspace Canvas node registry conformance', () => {
     }
   })
 
-  it('resolves frozen ratio, media dimensions, asset policy, and fallback in authority order', () => {
+  it('preserves frozen media frames and otherwise uses the project frame before a legacy fallback', () => {
     const frozen = resolveWorkspaceCanvasMediaShell({
       kind: 'resourceCard',
       mediaType: 'image',
@@ -92,7 +92,7 @@ describe('workspace Canvas node registry conformance', () => {
       schemaId: WORKSPACE_RESOURCE_SCHEMA.CHARACTER_IMAGE,
       projectAspectRatio: '16:9',
     })
-    expect(asset.width / asset.height).toBeCloseTo(4 / 3, 1)
+    expect(asset.width / asset.height).toBeCloseTo(16 / 9, 1)
     expect(asset.fit).toBe('contain')
 
     const fallback = resolveWorkspaceCanvasMediaShell({

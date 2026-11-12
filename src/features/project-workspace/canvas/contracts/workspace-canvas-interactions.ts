@@ -20,6 +20,7 @@ export type WorkspaceCanvasNodeActionKey =
   | 'preview_alternatives'
   | 'regenerate'
   | 'animate'
+  | 'toggle_workflow'
   | 'use_as_reference'
   | 'retry'
   | 'delete'
@@ -33,6 +34,13 @@ export interface WorkspaceCanvasBillableOperationView {
   readonly kind: Exclude<WorkspaceCanvasResourceOperationKind, 'delete'>
   readonly operationId: string
   readonly confirmation: 'billable_media'
+  readonly input: WorkspaceResourceJsonObject
+}
+
+export interface WorkspaceCanvasMergeRetryOperationView {
+  readonly kind: 'retry'
+  readonly operationId: 'merge_videos'
+  readonly confirmation: 'none'
   readonly input: WorkspaceResourceJsonObject
 }
 
@@ -50,6 +58,7 @@ export interface WorkspaceCanvasDeleteOperationView {
 export type WorkspaceCanvasResourceOperationView =
   | WorkspaceCanvasBillableOperationView
   | WorkspaceCanvasDeleteOperationView
+  | WorkspaceCanvasMergeRetryOperationView
 
 /**
  * Client extension point for the Resource Card View. These optional fields are
@@ -65,6 +74,7 @@ export interface WorkspaceCanvasResourcePreviewView {
   readonly resourceId: string
   readonly name: string
   readonly status: WorkspaceResourceStatus
+  readonly workflowEnabled?: boolean
   readonly mediaType: WorkspaceResourceMediaType
   readonly schemaId: string
   readonly error: { readonly code: string } | null
@@ -85,6 +95,7 @@ export type WorkspaceCanvasResourceSummaryView =
       readonly width: number | null
       readonly height: number | null
       readonly durationMs: number | null
+      readonly posterUrl?: string | null
     }
   | { readonly kind: 'empty' }
 

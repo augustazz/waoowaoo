@@ -2,6 +2,9 @@ import {
   parseWorkspaceResourceGenerationTaskPayload,
   type WorkspaceResourceGenerationTaskPayload,
 } from '@/lib/workspace-resource/generation-contract'
+import { assertVideoExecutionContract } from '@/lib/ai-registry/video-execution-contract'
+import { resolveDeclaredVideoContract } from '@/lib/ai-registry/video-contracts'
+import { verifyVideoOutput } from '@/lib/ai-registry/video-output-verification'
 import { ensureMediaObjectFromStorageKey } from '@/lib/media/service'
 import { resolveWorkspaceResourceInputMedia } from '@/lib/workspace-resource/input-media'
 import { reportTaskProgress } from '../progress'
@@ -105,6 +108,7 @@ export async function handleWorkspaceResourceVideoTask(
     throw new Error(`WORKSPACE_RESOURCE_TASK_TARGET_INVALID:${data.targetType}`)
   }
   const payload = parseWorkspaceResourceGenerationTaskPayload(data.payload ?? {})
+  await assertVideoExecutionContract(data.userId, payload.resource.modelKey, payload.videoExecutionContract)
   if (
     payload.resource.resourceId !== data.targetId
     || payload.resource.mediaType !== 'video'
@@ -151,6 +155,14 @@ export async function handleWorkspaceResourceVideoTask(
     providerProxyUrl,
   )
   const media = await ensureMediaObjectFromStorageKey(stored.storageKey, stored.metadata)
+  const outputVerification = verifyVideoOutput({
+    actual: { durationMs: media.durationMs, width: media.width, height: media.height,
+      hasAudio: 'hasAudio' in stored.metadata && typeof stored.metadata.hasAudio === 'boolean' ? stored.metadata.hasAudio : undefined },
+    durationSeconds, aspectRatio: options.aspectRatio, generateAudio: options.generateAudio,
+    audioDefault: resolveDeclaredVideoContract(payload.resource.modelKey)?.audio.default,
+    resolution: options.resolution,
+    outputSizes: resolveDeclaredVideoContract(payload.resource.modelKey)?.outputSizes,
+  })
   return {
     mediaId: media.id,
     videoUrl: media.url,
@@ -158,6 +170,10 @@ export async function handleWorkspaceResourceVideoTask(
     modelKey: providerRoute.modelKey,
     provider: providerRoute.provider,
     durationMs: media.durationMs,
+    width: media.width,
+    height: media.height,
+    outputVerification,
+    ...(payload.videoExecutionContract ? { videoExecutionContract: payload.videoExecutionContract } : {}),
     ...(typeof generated.actualVideoTokens === 'number'
       ? { actualVideoTokens: generated.actualVideoTokens }
       : {}),

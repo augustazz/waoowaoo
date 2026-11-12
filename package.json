@@ -101,7 +101,8 @@
     "test:critical:billing-concurrency:core": "cross-env DEPLOYMENT_EDITION=self-hosted BILLING_MODE=OFF BILLING_TEST_BOOTSTRAP=1 node scripts/test-verification/run-required-suite.mjs --suite critical-billing-concurrency-core --root tests/concurrency/billing",
     "test:critical:billing-concurrency:ee": "npm run edition:deps:check:cloud && cross-env DEPLOYMENT_EDITION=cloud BILLING_MODE=ENFORCE BILLING_TEST_BOOTSTRAP=1 node scripts/test-verification/run-required-suite.mjs --suite critical-billing-concurrency-ee --root ee/tests/concurrency/billing",
     "test:critical:security": "cross-env BILLING_TEST_BOOTSTRAP=1 node scripts/test-verification/run-required-suite.mjs --suite critical-security --root tests/integration/security",
-    "test:critical": "npm run test:critical:provider && npm run test:critical:task && npm run test:critical:temporal && npm run test:critical:billing && npm run test:critical:billing-concurrency && npm run test:critical:security"
+    "test:critical": "npm run test:critical:provider && npm run test:critical:task && npm run test:critical:temporal && npm run test:critical:billing && npm run test:critical:billing-concurrency && npm run test:critical:security",
+    "video:contracts": "tsx --tsconfig tsconfig.runtime-scripts.json scripts/video-model-contracts.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.22",

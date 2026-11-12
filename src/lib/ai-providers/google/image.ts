@@ -5,13 +5,15 @@ import type { AiProviderImageExecutionContext, GenerateResult } from '@/lib/ai-p
 import {
   assertAllowedGoogleImageOptions,
   normalizeGeminiImageSize,
-  toGoogleInlineData,
+  loadGoogleImageReferences,
   type GoogleContentPart,
 } from '@/lib/ai-providers/shared/google-image-helpers'
 import { requireSelectedModelId } from '@/lib/ai-providers/shared/model-selection'
 import { withProviderProxyDispatcher } from '@/lib/http/outbound-proxy'
 import { GOOGLE_PROVIDER_PROXY_TARGET } from '@/lib/ai-providers/google/proxy-target'
 import { AppError } from '@/lib/errors/app-error'
+import { googleImageReferenceLimit } from './models'
+import { imageReferenceCountIssue } from '@/lib/ai-registry/generation-reference-policy'
 import {
   captureGoogleSdkSubmission,
   googleSafetyTerminalError,
@@ -36,6 +38,8 @@ async function executeGoogleImageGenerationInternal(input: AiProviderImageExecut
 
   const modelId = requireSelectedModelId(input.selection, 'google:image')
   const referenceImages = options.referenceImages ?? []
+  const referenceIssue = imageReferenceCountIssue(googleImageReferenceLimit(modelId), referenceImages.length)
+  if (referenceIssue) throw new AppError('INVALID_PARAMS', referenceIssue.code, { provider: 'google', details: { ...referenceIssue } })
 
   if (modelId === 'gemini-3-pro-image-preview-batch') {
     const { submitGeminiBatch } = await import('@/lib/ai-providers/google/batch')
@@ -89,12 +93,8 @@ async function executeGoogleImageGenerationInternal(input: AiProviderImageExecut
     }
   }
 
-  const contentParts: GoogleContentPart[] = []
+  const contentParts: GoogleContentPart[] = await loadGoogleImageReferences(referenceImages, googleImageReferenceLimit(modelId))
   const imageSize = normalizeGeminiImageSize(options.resolution)
-  for (const imageSource of referenceImages.slice(0, 14)) {
-    const inlineData = await toGoogleInlineData(imageSource)
-    if (inlineData) contentParts.push({ inlineData })
-  }
   contentParts.push({ text: input.prompt })
 
   const safetySettings = [

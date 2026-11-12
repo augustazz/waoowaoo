@@ -9,8 +9,11 @@ import { fetchWithProviderProxy } from '@/lib/http/outbound-proxy'
 import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 import { MAX_IMAGE_BYTES } from '@/lib/http/body-limits'
 import { AppError } from '@/lib/errors/app-error'
+import { buildGptImage2OptionSchema, resolveGptImage2ImageSize, type GptImage2Resolution } from '@/lib/ai-providers/shared/gpt-image-2'
 import { normalizeResponsesBaseUrl, OPENAI_COMPATIBLE_PROVIDER_KEY } from './config'
-import { GROK_IMAGE_ASPECT_RATIOS, isGrokImagineImageModel } from './image-options'
+import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/ai-registry/capabilities-catalog'
+import { imageReferenceCountIssue } from '@/lib/ai-registry/generation-reference-policy'
+import { GROK_IMAGE_ASPECT_RATIOS, isGrokImagineImageModel, isGptImage2Model } from './image-options'
 
 /**
  * Channel routers (one-api / new-api) answer 500 with these machine codes when
@@ -50,16 +53,23 @@ async function throwCompatibleImageHttpFailure(response: Response): Promise<neve
 
 export function describeCompatibleImage(selection: AiResolvedSelection) {
   const grokImage = isGrokImagineImageModel(selection.modelId)
+  const maxReferenceImages = resolveBuiltinCapabilitiesByModelKey('image', selection.modelKey)?.image?.maxReferenceImages ?? 0
   return describeMediaVariantBase({
     selection, modality: 'image', executionMode: 'sync',
-    optionSchema: buildMediaOptionSchema('image', {
+    optionSchema: isGptImage2Model(selection.modelId) ? buildGptImage2OptionSchema({
+      resolutionOptions: ['1K', '2K', '4K'],
+      qualityOptions: ['auto', 'low', 'medium', 'high'],
+      defaultResolution: '1K', defaultQuality: 'auto', defaultOutputFormat: 'png',
+      maxReferenceImages,
+      excludedKeys: ['keepOriginalAspectRatio'],
+    }) : buildMediaOptionSchema('image', {
       excludedKeys: ['resolution', 'keepOriginalAspectRatio', ...(grokImage ? ['size'] : ['aspectRatio'])],
       validators: {
         size: nonEmptyStringValidator(),
         ...(grokImage ? { aspectRatio: enumValidator(GROK_IMAGE_ASPECT_RATIOS) } : {}),
         quality: nonEmptyStringValidator(),
         outputFormat: enumValidator(['png', 'jpeg', 'webp']),
-        referenceImages: stringArrayValidator({ maxLength: 16 }),
+        referenceImages: stringArrayValidator({ maxLength: maxReferenceImages }),
       },
     }),
   })
@@ -69,16 +79,27 @@ export async function executeCompatibleImage(input: AiProviderImageExecutionCont
   if (!input.providerConfig.baseUrl) throw new Error('PROVIDER_BASE_URL_MISSING: openai-compatible')
   const baseUrl = normalizeResponsesBaseUrl(input.providerConfig.baseUrl)
   const options = input.options ?? {}
+  // GPT Image 2 expresses the project frame through pixel dimensions. Use
+  // the shared sizing policy used by the other GPT Image 2 adapters, including
+  // frozen tasks whose derived imageSize object was intentionally omitted.
+  const gptImageSize = isGptImage2Model(input.selection.modelId) && options.aspectRatio
+    ? resolveGptImage2ImageSize({
+        aspectRatio: options.aspectRatio,
+        resolution: (options.resolution ?? '1K') as GptImage2Resolution,
+      }) : null
   const fields = {
     model: input.selection.modelId, prompt: input.prompt, n: 1,
     ...(isGrokImagineImageModel(input.selection.modelId) && options.aspectRatio
       ? { aspect_ratio: options.aspectRatio } : {}),
-    ...(options.size ? { size: options.size } : {}),
+    ...(gptImageSize ? { size: `${gptImageSize.width}x${gptImageSize.height}` }
+      : options.size ? { size: options.size } : {}),
     ...(options.quality ? { quality: options.quality } : {}),
     ...(options.outputFormat ? { output_format: options.outputFormat } : {}),
     ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
   }
   const references = options.referenceImages ?? []
+  const referenceIssue = imageReferenceCountIssue(resolveBuiltinCapabilitiesByModelKey('image', input.selection.modelKey)?.image?.maxReferenceImages, references.length)
+  if (referenceIssue) throw new AppError('INVALID_PARAMS', referenceIssue.code, { provider: OPENAI_COMPATIBLE_PROVIDER_KEY, details: { ...referenceIssue } })
   const headers: Record<string, string> = { Authorization: `Bearer ${input.providerConfig.apiKey}` }
   let body: string | FormData
   if (references.length) {

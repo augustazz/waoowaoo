@@ -178,5 +178,15 @@
     "available": "{count} models available in the dropdowns above",
     "manual": "Enter model ID manually",
     "provider": "Provider"
-  }
+  },
+  "videoAvailability": {
+    "provider_configuration_invalid": "Unavailable: provider configuration or credentials could not be loaded",
+    "capabilities_unknown": "Unavailable: video capabilities are not declared",
+    "duration_options_missing": "Unavailable: no supported duration",
+    "protocol_unsupported": "Unavailable: video protocol is not implemented",
+    "channel_mismatch": "Unavailable: API URL does not match the channel contract",
+    "input_modes_unavailable": "No video input mode is available in this deployment",
+    "pricing": "Unavailable: pricing is missing for the current billing mode"
+  },
+  "videoModelChangeHint": "Changes apply to new tasks. Existing shot duration, quality, references and sound requirements are checked before submission."
 }
